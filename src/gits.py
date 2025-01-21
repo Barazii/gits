@@ -1,4 +1,5 @@
 import argparse
+import argcomplete
 from src.commands import (
     schedule_push_cmd,
     schedule_commit_cmd,
@@ -16,7 +17,10 @@ def gits():
 
     push_parser = subparsers.add_parser("push", help="Schedule a git push")
     push_parser.add_argument(
-        "-ts", "--timestamp", help="When to execute the push (format: MM-DD-YYYY-HH:mm)"
+        "-ts",
+        "--timestamp",
+        required=True,
+        help="When to execute the push (format: MM-DD-YYYY-HH:mm)",
     )
 
     commit_parser = subparsers.add_parser("commit", help="Schedule a git commit")
@@ -24,9 +28,11 @@ def gits():
     commit_parser.add_argument(
         "-ts",
         "--timestamp",
+        required=True,
         help="When to execute the commit (format: MM-DD-YYYY-HH:mm)",
     )
 
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     if args.command == "push":
