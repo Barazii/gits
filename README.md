@@ -8,3 +8,4 @@ run the scheduler on the cloud so that the laptop can be turned off
 tab completion
 when task executed, terminate program. 
 when task executed, json file emtpied from that task.
+add argument for --force push
