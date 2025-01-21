@@ -11,3 +11,4 @@ when task executed, json file emtpied from that task.
 add argument for --force push
 remove year from timestamp
 remove dependency on schedule library, do it by a thread and wait till requested time.
+add logs.

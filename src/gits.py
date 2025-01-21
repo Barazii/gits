@@ -2,10 +2,9 @@ import argparse
 from src.commands import (
     schedule_push_cmd,
     schedule_commit_cmd,
-    list_tasks_cmd,
-    cancel_task_cmd,
 )
-from threading import Thread, Event
+from threading import Event
+
 
 task_complete = Event()
 
@@ -28,21 +27,12 @@ def gits():
         help="When to execute the commit (format: MM-DD-YYYY-HH:mm)",
     )
 
-    status_parser = subparsers.add_parser("status", help="List scheduled tasks")
-
-    cancel_parser = subparsers.add_parser("cancel", help="Cancel a scheduled task")
-    cancel_parser.add_argument("task_id", type=int, help="ID of the task to cancel")
-
     args = parser.parse_args()
 
     if args.command == "push":
         schedule_push_cmd(args.timestamp, task_complete)
     elif args.command == "commit":
         schedule_commit_cmd(args.message, args.timestamp, task_complete)
-    elif args.command == "status":
-        list_tasks_cmd()
-    elif args.command == "cancel":
-        cancel_task_cmd(args.task_id)
     else:
         parser.print_help()
 
