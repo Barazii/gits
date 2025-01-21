@@ -1,32 +1,44 @@
-import schedule
 import time
+from threading import Timer, Event
 from datetime import datetime
 from src.git_commands import *
 
 
-def schedule_push(timestamp):
+def schedule_push(timestamp, task_complete):
     dt = datetime.strptime(timestamp, "%m-%d-%Y-%H:%M")
-    schedule.every().day.at(dt.strftime("%H:%M")).do(execute_push)
+    delay = (dt - datetime.now().replace(microsecond=0)).total_seconds()
+    if delay > 0:
+        timer = Timer(delay, execute_push, args=[task_complete])
+        timer.start()
+        print(f"Push scheduled for {dt}")
+    else:
+        print("Cannot schedule a push for the past")
     return dt
 
-def schedule_commit(message, timestamp):
+
+def schedule_commit(message, timestamp, task_complete):
     dt = datetime.strptime(timestamp, "%m-%d-%Y-%H:%M")
-    schedule.every().day.at(dt.strftime("%H:%M")).do(execute_commit, message)
+    print("###", dt)
+    delay = (dt - datetime.now().replace(microsecond=0)).total_seconds()
+    print("###", datetime.now().replace(microsecond=0))
+    if delay > 0:
+        timer = Timer(delay, execute_commit, args=[message, task_complete])
+        timer.start()
+        print(f"Push scheduled for {dt}")
+    else:
+        print("Cannot schedule a push for the past")
     return dt
 
-def execute_push():
+
+def execute_push(task_complete):
     print("Executing git push")
     # TODO: Implement actual git push
     git_push()
+    task_complete.set()
 
 
-def execute_commit(message):
+def execute_commit(message, task_complete):
     print(f'Executing git commit -m "{message}"')
     # TODO: Implement actual git commit
     git_commit(message=message)
-
-
-def run_scheduler():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    task_complete.set()

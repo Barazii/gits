@@ -5,14 +5,12 @@ from src.commands import (
     list_tasks_cmd,
     cancel_task_cmd,
 )
-from src.scheduler import run_scheduler
-from threading import Thread
+from threading import Thread, Event
+
+task_complete = Event()
 
 
 def gits():
-    scheduler_thread = Thread(target=run_scheduler)
-    scheduler_thread.start()
-
     parser = argparse.ArgumentParser(description="Git Push Scheduler")
 
     subparsers = parser.add_subparsers(dest="command")
@@ -38,15 +36,17 @@ def gits():
     args = parser.parse_args()
 
     if args.command == "push":
-        schedule_push_cmd(args.timestamp)
+        schedule_push_cmd(args.timestamp, task_complete)
     elif args.command == "commit":
-        schedule_commit_cmd(args.message, args.timestamp)
+        schedule_commit_cmd(args.message, args.timestamp, task_complete)
     elif args.command == "status":
         list_tasks_cmd()
     elif args.command == "cancel":
         cancel_task_cmd(args.task_id)
     else:
         parser.print_help()
+
+    task_complete.wait()  # Wait for the scheduled task to complete
 
 
 if __name__ == "__main__":
