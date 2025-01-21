@@ -1,5 +1,5 @@
-from scheduler import schedule_push, schedule_commit
-from storage import add_task, load_tasks, remove_task
+from src.scheduler import schedule_push, schedule_commit
+from src.storage import add_task, load_tasks, remove_task
 
 def schedule_push_cmd(timestamp):
     task = {'type': 'push', 'timestamp': timestamp}

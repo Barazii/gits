@@ -9,3 +9,4 @@ tab completion
 when task executed, terminate program. 
 when task executed, json file emtpied from that task.
 add argument for --force push
+remove year from timestamp

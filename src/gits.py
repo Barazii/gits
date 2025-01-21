@@ -1,11 +1,11 @@
 import argparse
-from commands import (
+from src.commands import (
     schedule_push_cmd,
     schedule_commit_cmd,
     list_tasks_cmd,
     cancel_task_cmd,
 )
-from scheduler import run_scheduler
+from src.scheduler import run_scheduler
 from threading import Thread
 
 

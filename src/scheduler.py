@@ -1,7 +1,7 @@
 import schedule
 import time
 from datetime import datetime
-from git_commands import *
+from src.git_commands import *
 
 
 def schedule_push(timestamp):
@@ -17,13 +17,13 @@ def schedule_commit(message, timestamp):
 def execute_push():
     print("Executing git push")
     # TODO: Implement actual git push
-    # git_push()
+    git_push()
 
 
 def execute_commit(message):
     print(f'Executing git commit -m "{message}"')
     # TODO: Implement actual git commit
-    # git_commit(message=message)
+    git_commit(message=message)
 
 
 def run_scheduler():
