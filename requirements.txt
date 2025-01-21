@@ -1,1 +1,1 @@
-schedule
+argcomplete
