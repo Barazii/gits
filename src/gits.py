@@ -10,6 +10,9 @@ from threading import Thread
 
 
 def gits():
+    scheduler_thread = Thread(target=run_scheduler)
+    scheduler_thread.start()
+
     parser = argparse.ArgumentParser(description="Git Push Scheduler")
 
     subparsers = parser.add_subparsers(dest="command")
@@ -47,7 +50,4 @@ def gits():
 
 
 if __name__ == "__main__":
-    scheduler_thread = Thread(target=run_scheduler)
-    scheduler_thread.start()
-
     gits()
