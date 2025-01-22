@@ -14,7 +14,8 @@ def schedule_push(timestamp, task_complete):
         timer = Timer(delay, execute_push, args=[task_complete])
         timer.start()
     else:
-        logger.info("Cannot schedule a push for the past")
+        logger.error("Cannot schedule a push for the past")
+        raise ValueError("Cannot schedule a push for the past")
     return dt
 
 
@@ -25,7 +26,8 @@ def schedule_commit(message, timestamp, task_complete):
         timer = Timer(delay, execute_commit, args=[message, task_complete])
         timer.start()
     else:
-        logger.info("Cannot schedule a push for the past")
+        logger.error("Cannot schedule a commit for the past")
+        raise ValueError("Cannot schedule a commit for the past")
     return dt
 
 

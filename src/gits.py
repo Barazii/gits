@@ -5,7 +5,10 @@ from src.commands import (
     schedule_commit_cmd,
 )
 from threading import Event
+import logging
 
+
+logging.basicConfig(level=logging.INFO, format="%(name)s:%(levelname)s: %(message)s")
 
 task_complete = Event()
 
