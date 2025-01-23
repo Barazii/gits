@@ -17,6 +17,14 @@ def gits():
 
     push_parser = subparsers.add_parser("push", help="Schedule a git push")
     push_parser.add_argument(
+        "-f",
+        "--force",
+        required=False,
+        type=bool,
+        default=False,
+        help="Force push option",
+    )
+    push_parser.add_argument(
         "-ts",
         "--timestamp",
         required=True,
@@ -36,7 +44,7 @@ def gits():
     args = parser.parse_args()
 
     if args.command == "push":
-        schedule_push(args.timestamp, task_complete)
+        schedule_push(args.force, args.timestamp, task_complete)
     elif args.command == "commit":
         schedule_commit(args.message, args.timestamp, task_complete)
     else:

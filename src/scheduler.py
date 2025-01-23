@@ -7,11 +7,11 @@ import logging
 logger = logging.getLogger("gits")
 
 
-def schedule_push(timestamp, task_complete):
+def schedule_push(force_push, timestamp, task_complete):
     dt = datetime.strptime(timestamp, "%m-%d-%Y-%H:%M")
     delay = (dt - datetime.now().replace(microsecond=0)).total_seconds()
     if delay > 0:
-        timer = Timer(delay, execute_push, args=[task_complete])
+        timer = Timer(delay, execute_push, args=[force_push, task_complete])
         timer.start()
         logger.info(f"A push scheduled for {dt}")
     else:
@@ -31,9 +31,8 @@ def schedule_commit(message, timestamp, task_complete):
         raise ValueError("Cannot schedule a commit for the past")
 
 
-def execute_push(task_complete):
-    logger.info("Executing git push")
-    git_push()
+def execute_push(force_push, task_complete):
+    git_push(force_push)
     task_complete.set()
 
 
