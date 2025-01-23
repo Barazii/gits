@@ -1,9 +1,6 @@
 import argparse
 import argcomplete
-from src.commands import (
-    schedule_push_cmd,
-    schedule_commit_cmd,
-)
+from src.scheduler import schedule_push, schedule_commit
 from threading import Event
 import logging
 
@@ -39,9 +36,9 @@ def gits():
     args = parser.parse_args()
 
     if args.command == "push":
-        schedule_push_cmd(args.timestamp, task_complete)
+        schedule_push(args.timestamp, task_complete)
     elif args.command == "commit":
-        schedule_commit_cmd(args.message, args.timestamp, task_complete)
+        schedule_commit(args.message, args.timestamp, task_complete)
     else:
         parser.print_help()
 
