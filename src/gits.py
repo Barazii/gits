@@ -28,7 +28,7 @@ def gits():
         "-ts",
         "--timestamp",
         required=True,
-        help="When to execute the push (format: MM-DD-YYYY-HH:mm)",
+        help="When to execute the push (format: MM-DD-HH:mm)",
     )
 
     commit_parser = subparsers.add_parser("commit", help="Schedule a git commit")
@@ -37,7 +37,7 @@ def gits():
         "-ts",
         "--timestamp",
         required=True,
-        help="When to execute the commit (format: MM-DD-YYYY-HH:mm)",
+        help="When to execute the commit (format: MM-DD-HH:mm)",
     )
 
     argcomplete.autocomplete(parser)

@@ -8,8 +8,9 @@ logger = logging.getLogger("gits")
 
 
 def schedule_push(force_push, timestamp, task_complete):
-    dt = datetime.strptime(timestamp, "%m-%d-%Y-%H:%M")
-    delay = (dt - datetime.now().replace(microsecond=0)).total_seconds()
+    dt = datetime.strptime(timestamp, f"%m-%d-%H:%M")
+    dt = dt.replace(year=datetime.now().year)
+    delay = (dt - datetime.now()).total_seconds()
     if delay > 0:
         timer = Timer(delay, execute_push, args=[force_push, task_complete])
         timer.start()
@@ -20,8 +21,9 @@ def schedule_push(force_push, timestamp, task_complete):
 
 
 def schedule_commit(message, timestamp, task_complete):
-    dt = datetime.strptime(timestamp, "%m-%d-%Y-%H:%M")
-    delay = (dt - datetime.now().replace(microsecond=0)).total_seconds()
+    dt = datetime.strptime(timestamp, f"%m-%d-%H:%M")
+    dt = dt.replace(year=datetime.now().year)
+    delay = (dt - datetime.now()).total_seconds()
     if delay > 0:
         timer = Timer(delay, execute_commit, args=[message, task_complete])
         timer.start()
