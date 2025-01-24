@@ -1,4 +1,4 @@
-# Git Scheduler (`gits`)
+# Git Scheduler (gits)
 
 ## Overview
 `gits` is a command-line tool to schedule Git `push` or `commit` commands for execution at a specified time.
