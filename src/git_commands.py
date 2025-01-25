@@ -16,3 +16,7 @@ def git_push(force_push):
 
 def git_commit(message):
     subprocess.run(["git", "commit", "-m", message])
+
+
+def git_add(pathspec):
+    subprocess.run(["git", "add", *pathspec])

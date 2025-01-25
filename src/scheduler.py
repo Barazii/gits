@@ -32,6 +32,18 @@ def schedule_commit(message, timestamp, task_complete):
         logger.error("Cannot schedule a commit for the past")
         raise ValueError("Cannot schedule a commit for the past")
 
+def schedule_add(pathspec, timestamp, task_complete):
+    dt = datetime.strptime(timestamp, f"%m-%d-%H:%M")
+    dt = dt.replace(year=datetime.now().year)
+    delay = (dt - datetime.now()).total_seconds()
+    if delay > 0:
+        timer = Timer(delay, execute_add, args=[pathspec, task_complete])
+        timer.start()
+        logger.info(f"An add scheduled for {dt}")
+    else:
+        logger.error("Cannot schedule an add for the past")
+        raise ValueError("Cannot schedule an add for the past")
+
 
 def execute_push(force_push, task_complete):
     git_push(force_push)
@@ -41,4 +53,9 @@ def execute_push(force_push, task_complete):
 def execute_commit(message, task_complete):
     logger.info(f'Executing git commit -m "{message}"')
     git_commit(message=message)
+    task_complete.set()
+
+def execute_add(pathspec, task_complete):
+    logger.info(f'Executing git add "{pathspec}"')
+    git_add(pathspec)
     task_complete.set()
