@@ -6,6 +6,13 @@ logger = logging.getLogger("gits")
 
 
 def git_push(force_push):
+    # pull before push
+    try:
+        ret = subprocess.run(["git", "pull"], check=True)
+    except subprocess.CalledProcessError:
+        logger.error("Merge conflict in git pull")
+        raise ValueError(f"Merge conflict in git pull {ret.stdout}")
+    # push
     if not force_push:
         logger.info("Executing git push")
         subprocess.run(["git", "push"])
