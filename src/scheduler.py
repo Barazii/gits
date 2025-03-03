@@ -1,61 +1,33 @@
-from threading import Timer
 from datetime import datetime
 from src.git_commands import *
 import logging
+import time
+import os
+import sys
 
 
 logger = logging.getLogger("gits")
 
 
-def schedule_push(force_push, timestamp, task_complete):
-    dt = datetime.strptime(timestamp, f"%m-%d-%H:%M")
+def schedule_cmd(args):
+    dt = datetime.strptime(args.timestamp, f"%m-%d-%H:%M")
     dt = dt.replace(year=datetime.now().year)
     delay = (dt - datetime.now()).total_seconds()
     if delay > 0:
-        timer = Timer(delay, execute_push, args=[force_push, task_complete])
-        timer.start()
-        logger.info(f"A push scheduled for {dt}")
-    else:
-        logger.error("Cannot schedule a push for the past")
-        raise ValueError("Cannot schedule a push for the past")
-
-
-def schedule_commit(message, timestamp, task_complete):
-    dt = datetime.strptime(timestamp, f"%m-%d-%H:%M")
-    dt = dt.replace(year=datetime.now().year)
-    delay = (dt - datetime.now()).total_seconds()
-    if delay > 0:
-        timer = Timer(delay, execute_commit, args=[message, task_complete])
-        timer.start()
-        logger.info(f"A commit scheduled for {dt}")
-    else:
-        logger.error("Cannot schedule a commit for the past")
-        raise ValueError("Cannot schedule a commit for the past")
-
-def schedule_add(pathspec, timestamp, task_complete):
-    dt = datetime.strptime(timestamp, f"%m-%d-%H:%M")
-    dt = dt.replace(year=datetime.now().year)
-    delay = (dt - datetime.now()).total_seconds()
-    if delay > 0:
-        timer = Timer(delay, execute_add, args=[pathspec, task_complete])
-        timer.start()
-        logger.info(f"An add scheduled for {dt}")
+        pid = os.fork()
+        if pid == 0:  # Child process
+            os.setsid()
+            time.sleep(delay)
+            if args.command == "add":
+                git_add(args.pathspec)
+            elif args.command == "commit":
+                git_commit(args.message)
+            elif args.command == "push":
+                git_push(args.force)
+            sys.exit(0)
+        else:  # Parent process
+            logger.info(f"An add scheduled for {dt}")
+            sys.exit(0)
     else:
         logger.error("Cannot schedule an add for the past")
         raise ValueError("Cannot schedule an add for the past")
-
-
-def execute_push(force_push, task_complete):
-    git_push(force_push)
-    task_complete.set()
-
-
-def execute_commit(message, task_complete):
-    logger.info(f'Executing git commit -m "{message}"')
-    git_commit(message=message)
-    task_complete.set()
-
-def execute_add(pathspec, task_complete):
-    logger.info(f'Executing git add "{pathspec}"')
-    git_add(pathspec)
-    task_complete.set()

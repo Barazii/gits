@@ -1,13 +1,10 @@
 import argparse
 import argcomplete
-from src.scheduler import schedule_push, schedule_commit, schedule_add
-from threading import Event
+from src.scheduler import schedule_cmd
 import logging
 
 
 logging.basicConfig(level=logging.INFO, format="%(name)s:%(levelname)s: %(message)s")
-
-task_complete = Event()
 
 
 def gits():
@@ -58,16 +55,7 @@ def gits():
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
-    if args.command == "push":
-        schedule_push(args.force, args.timestamp, task_complete)
-    elif args.command == "commit":
-        schedule_commit(args.message, args.timestamp, task_complete)
-    elif args.command == "add":
-        schedule_add(args.pathspec, args.timestamp, task_complete)
-    else:
-        parser.print_help()
-
-    task_complete.wait()  # Wait for the scheduled tasks/threads to finish
+    schedule_cmd(args)
 
 
 if __name__ == "__main__":
