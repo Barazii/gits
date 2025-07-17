@@ -94,7 +94,7 @@ aws events put-targets --region "$AWS_REGION" --rule "$RULE_NAME" --targets '[
   {
     "Id": "Target1",
     "Arn": "arn:aws:codebuild:'$AWS_REGION':482497089777:project/'$AWS_CODEBUILD_PROJECT_NAME'",
-    "RoleArn": "arn:aws:iam::482497089777:role/EventBridgeCodeBuildRole",
+    "RoleArn": "arn:aws:iam::482497089777:role/EventBridgeServiceRoleForCodeBuild",
     "Input": "{\"environmentVariablesOverride\":[{\"name\":\"S3_PATH\",\"value\":\"s3://'$AWS_BUCKET_NAME'/'$PREFIX'/'$(basename "$ZIP_FILE")'\",\"type\":\"PLAINTEXT\"},{\"name\":\"REPO_URL\",\"value\":\"'$REPO_URL'\",\"type\":\"PLAINTEXT\"}]}"
   }
 ]'
