@@ -7,22 +7,21 @@ phases:
       - apt-get install -y git unzip
   pre_build:
     commands:
-      - echo "Retrieving GitHub token"
+      # Retrieving GitHub token from AWS Secrets Manager
       - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id githubpat --query SecretString --output text | jq -r '.Token')
       - git config --global credential.helper '!f() { echo "username=Barazii"; echo "password=$GITHUB_TOKEN"; }; f'
       - git config --global user.email "mahmoud.baraziii@gmail.com"
       - git config --global user.name "Barazii"
   build:
     commands:
-      - echo "Cloning repository from $REPO_URL"
+      # Cloning target repository from github
       - git clone $REPO_URL repo
       - cd repo
-      - echo "Downloading modified files from $S3_PATH"
+      # Downloading modified files from S3
       - aws s3 cp $S3_PATH changes.zip
       - unzip -o changes.zip
       - rm changes.zip
-      - echo "Applying changes"
+      # git operations
       - git add .
-      - git commit -m "Applied changes from S3" || echo "No changes to commit"
-      - echo "Pushing to GitHub"
+      - git commit -m "Applied changes using gits" || echo "No changes to commit"
       - git push origin main
