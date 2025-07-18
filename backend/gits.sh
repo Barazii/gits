@@ -34,6 +34,12 @@ if [ $? -ne 0 ] || [ -z "$REPO_URL" ]; then
     echo "Error: Could not retrieve repository URL. Ensure 'origin' remote is set."
     exit 1
 fi
+# Check if REPO_URL is not HTTPS
+if [[ ! "$REPO_URL" =~ ^https://.*$ ]]; then
+    echo "Error: Repository URL must be HTTPS."
+    echo "Update your remote URL to HTTPS format using: git remote set-url origin <https-url>"
+    exit 1
+fi
 
 # Generate unique identifiers
 PREFIX="changes-$(date +%s)"
