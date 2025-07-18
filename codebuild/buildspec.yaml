@@ -8,7 +8,7 @@ phases:
   pre_build:
     commands:
       - echo "Retrieving GitHub token"
-      - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id githubtoken --query SecretString --output text)
+      - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id githubpat --query SecretString --output text)
       - git config --global credential.helper '!f() { echo "username=barazii"; echo "password=$GITHUB_TOKEN"; }; f'
       - git config --global user.email "mahmoud.baraziii@gmail.com"
       - git config --global user.name "barazii"

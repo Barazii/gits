@@ -17,7 +17,7 @@
       "Action": [
         "secretsmanager:GetSecretValue"
       ],
-      "Resource": "arn:aws:secretsmanager:eu-north-1:482497089777:secret:githubtoken-*"
+      "Resource": "arn:aws:secretsmanager:eu-north-1:482497089777:secret:githubpat-*"
     },
     {
       "Effect": "Allow",
