@@ -11,7 +11,7 @@ phases:
       - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id githubpat --query SecretString --output text | jq -r '.Token')
       - git config --global credential.helper '!f() { echo "username=barazii"; echo "password=$GITHUB_TOKEN"; }; f'
       - git config --global user.email "mahmoud.baraziii@gmail.com"
-      - git config --global user.name "barazii"
+      - git config --global user.name "Barazii"
   build:
     commands:
       - echo "Cloning repository from $REPO_URL"
