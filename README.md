@@ -1,240 +1,121 @@
-# 🕐 gits - Git Command Scheduler
+# 🕐 gits - Git Scheduler
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://python.org)
 [![Shell](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
-[![License](https://img.shields.io/badge/License-[LICENSE_TYPE]-blue.svg)](#license)
 
-> A powerful command-line tool to schedule Git commands for execution at specified times
+> A powerful event-driven serverless command-line tool to schedule Git commands for execution at specified times
 
 ## 📋 Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
+- [Architecture](#architecture)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Configuration](#configuration)
-- [Examples](#examples)
-- [Contributing](#contributing)
-- [License](#license)
-- [Support](#support)
 
-## 🎯 Overview
+## Overview
 
-`gits` is a sophisticated command-line utility that allows developers to schedule Git operations (`push`, `commit`, and more) for execution at specific times. Perfect for automating Git workflows, managing deployment schedules, or ensuring commits happen during optimal times.
+`gits` is a multi-level CLI utility that allows developers to schedule Git operations for execution at specific times in the future. Perfect for securing your code that you developed at a late time in the night without bothering your teammates by getting email notifications of new commits in the repository. This software was born out of real-life challenges of pushing code at late time when I was working a full-time developer at a company.
 
-## ✨ Features
+## Features
 
-- 🕒 **Flexible Scheduling**: Schedule Git commands for specific times or intervals
-- 🔄 **Multiple Git Operations**: Support for `push`, `commit`, and other Git commands
-- 📅 **Various Time Formats**: [PLACEHOLDER: Specify supported time formats]
-- 🛡️ **Error Handling**: Robust error handling and logging
-- 📊 **Status Tracking**: Monitor scheduled tasks and their execution status
-- 🔧 **Configuration**: Customizable settings and preferences
-- 💻 **Cross-Platform**: Works on Linux, macOS, and Windows
+- **Freedom**: Schedule Git commands without worrying about others being notified at inapproperiate times or risking the loss of your code. More interestingly, gits is serverless which means you can turn off your laptop and the code will still be commited and pushed at the specified time.
+- **Customizability**: Set your AWS cloud settings once and gits will work just for you. 
+- **Cross-Platform**: Works on Linux and macOS.
+- **Secure**: Your code will be stored at the world's best cloud servers - AWS. 
 
-## 🚀 Installation
+## Architecture
+
+## Installation
 
 ### Prerequisites
 
 - Python 3.x
 - Git
-- pipx (recommended for system-wide installation)
+- AWS account
 
-### Install pipx (if not already installed)
+### Install and setup gits
 
-```bash
-# Ubuntu/Debian
-sudo apt install pipx
+1. **Create GitHub Personal Access Token (PAT) and store it in AWS Secrets Manager**
 
-# macOS
-brew install pipx
+The GitHub PAT allows you to push code to your repositories from a different machine/server. The steps of that should be fairly doable.
 
-# Other systems
-python -m pip install --user pipx
-```
+2. **Create AWS S3 bucket** 
 
-### Install gits
+This is the storage service where your modified code files will be stored temporarily until the code is pushed to the target GitHub repository at the scheduled time. The creation of a S3 bucket should be easy.
 
-1. **Clone the repository**
+3. **Clone the repository**
+
+On your local computer:
    ```bash
    git clone https://github.com/Barazii/gits.git
    cd gits
    ```
 
-2. **Install using pipx**
+4. **Define the configuration file**
+
+Replace the placeholders with your AWS account information and execute the following command:
+
    ```bash
-   pipx install .
+   cat <<EOF > ~/.gits/config
+   AWS_ACCOUNT_ID=xxx
+   AWS_BUCKET_NAME=xxx
+   AWS_REGION=xxx
+   AWS_CODEBUILD_PROJECT_NAME=xxx
+   AWS_GITHUB_TOKEN_SECRET=xxx
+   EOF
    ```
+Note that the variable `AWS_GITHUB_TOKEN_SECRET` should not store the token itself, only the name of the token as stored in AWS secrets manager.
 
-3. **Verify installation**
+5. **Generate AWS IAM permission policies**
+
+Go to the directory `iam_roles` and run the python script:
+
    ```bash
-   gits --version
+   python3 generate_policies.py
    ```
+Create two AWS IAM roles in your AWS account, one for CodeBuild and one for EventBridge, then take the generated json files and set them to the corresponding permission policies and trust policies. The IAM role's name of the EventBridge must be identical to the one used in the backend script when defining the event bridge target.
 
-## 📖 Usage
+6. **Create AWS CodeBuild project**
 
-### Basic Syntax
+- Use the AWS console to create a project having the same name you chose for the config variable `AWS_CODEBUILD_PROJECT_NAME` above.
+- Set the environment to any standard version `aws/codebuild/standard:5.0`.
+- Set the build source code to the yaml file buildspec.yaml in the directory `codebuild`.
+- Attach the IAM role that you created in the previous step for CodeBuild.
 
-```bash
-gits [OPTIONS] COMMAND [ARGS]
-```
+7. **Install gits system-wide**
 
-### Quick Start
+Go to the directory `backend` and make the backend bash script executable:
 
-```bash
-# Schedule a git push for a specific time
-gits schedule push --time "14:30"
+   ```bash
+   chmod +x gits.sh
+   ```
+Then place the script in the directory `/usr/local/bin`:
 
-# Schedule a commit with message
-gits schedule commit -m "Automated commit" --time "tomorrow 9:00"
+   ```bash
+   sudo cp gits.sh /usr/local/bin/gits
+   ```
+This allows you to run gits from any directory.
 
-# List all scheduled tasks
-gits list
+## Usage Syntax
 
-# Cancel a scheduled task
-gits cancel [TASK_ID]
-```
+Go to a directory of a project that you are developing and schedule a git command by simply running:
 
-### Command Reference
+   ```bash
+   gits [TIMESTAMP]
+   ```
+The timestamp format must be provided in UTC in ISO 8601 format, ending with Z. For example if you are in CEST timezone, then you schedule a gits job 2 hours before the current time. The format can be written as follows:
 
-| Command | Description |
-|---------|-------------|
-| `schedule` | Schedule a Git command for execution |
-| `list` | Display all scheduled tasks |
-| `cancel` | Cancel a scheduled task |
-| `status` | Show status of scheduled tasks |
-| `config` | Configure gits settings |
+   ```bash
+   gits 2025-07-18T17:22:00Z
+   ```
+This command will schedule a gits job at 19:22 of that day.
 
-### Options
+## Debugging
 
-| Option | Description |
-|--------|-------------|
-| `--time` | Specify execution time |
-| `--repeat` | Set recurring schedule |
-| `--dry-run` | Preview without executing |
-| `--verbose` | Enable verbose output |
-
-## ⚙️ Configuration
-
-Create a configuration file at `~/.config/gits/config.json`:
-
-```json
-{
-  "default_time_format": "[PLACEHOLDER: time format]",
-  "log_level": "INFO",
-  "max_concurrent_tasks": 5,
-  "notification_enabled": true
-}
-```
-
-## 💡 Examples
-
-### Schedule a Push
-
-```bash
-# Push at specific time today
-gits schedule push --time "15:30"
-
-# Push tomorrow morning
-gits schedule push --time "tomorrow 09:00"
-
-# Push every day at 6 PM
-gits schedule push --time "18:00" --repeat daily
-```
-
-### Schedule a Commit
-
-```bash
-# Commit with message at specific time
-gits schedule commit -m "Daily backup" --time "23:59"
-
-# Commit all changes tomorrow
-gits schedule commit -a -m "Weekly update" --time "2024-07-20 10:00"
-```
-
-### Advanced Usage
-
-```bash
-# Schedule multiple commands
-gits schedule commit -m "Stage 1" --time "14:00"
-gits schedule push --time "14:05"
-
-# Preview scheduled command
-gits schedule push --time "16:00" --dry-run
-```
-
-## 🗂️ Project Structure
-
-```
-gits/
-├── src/
-│   ├── gits/
-│   │   ├── __init__.py
-│   │   ├── cli.py          # Command-line interface
-│   │   ├── scheduler.py    # Scheduling logic
-│   │   └── [OTHER_MODULES] # [PLACEHOLDER: Add other modules]
-├── tests/                  # Test suite
-├── docs/                   # Documentation
-├── scripts/               # Utility scripts
-├── pyproject.toml         # Project configuration
-├── requirements.txt       # Dependencies
-└── README.md             # This file
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-1. Fork the repository
-2. Create a virtual environment
-3. Install development dependencies
-4. Make your changes
-5. Run tests
-6. Submit a pull request
-
-```bash
-# Setup development environment
-git clone https://github.com/yourusername/gits.git
-cd gits
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .[dev]
-```
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=gits
-
-# Run specific test file
-pytest tests/test_scheduler.py
-```
-
-## 📝 License
-
-This project is licensed under the [PLACEHOLDER: LICENSE_TYPE] License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- 📖 **Documentation**: [PLACEHOLDER: Documentation URL]
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/Barazii/gits/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/Barazii/gits/discussions)
-- 📧 **Contact**: [PLACEHOLDER: Contact information]
-
-## 🙏 Acknowledgments
-
-- Thanks to all contributors
-- Inspired by [PLACEHOLDER: Inspiration sources]
-- Built with ❤️ using Python and Shell
+- In the AWS secrets manager, make sure to add a key with the name `ServerType` that has the value `GitHub`. When CodeBuild establishes connection with build code source, it needs to know which server CodeBuild will be connected to.
+- When you create GitHub PAT, make sure the required repositories are selected. Also, make sure enough permissions are included in the PAT so you can push code to the target repository from a new remote server.
 
 ---
 
-**Made with ❤️ by [Barazii](https://github.com/Barazii)**
-
-⭐ If you find this project useful, please consider giving it a star!
+⭐ If you find this project cool, give it a star ⭐
