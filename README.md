@@ -19,12 +19,18 @@
 
 ## Features
 
-- **Freedom**: Schedule Git commands without worrying about others being notified at inapproperiate times or risking the loss of your code. More interestingly, gits is serverless which means you can turn off your laptop and the code will still be commited and pushed at the specified time.
+- **Freedom**: Schedule Git commands without worrying about the rest of the project co-developers being notified at inapproperiate times or risking the loss of your code. More interestingly, gits is serverless which means you can turn off your laptop and the code will still be commited and pushed at the specified time.
 - **Customizability**: Set your AWS cloud settings once and gits will work just for you. 
 - **Cross-Platform**: Works on Linux and macOS.
-- **Secure**: Your code will be stored at the world's best cloud servers - AWS. 
+- **Security**: Your code will be stored at the world's best and most secure cloud servers - AWS.
 
 ## Architecture
+
+Below is a high-level architecture diagram showing how gits operates across different AWS services
+
+![gits Architecture](diagram/diagram.drawio.png)
+
+The system leverages AWS EventBridge for scheduling, S3 for temporary code storage, and CodeBuild for executing Git commands at the specified time. The workflow is fully automated and serverless, ensuring reliable code commits even when your local machine is offline.
 
 ## Installation
 
