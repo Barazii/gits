@@ -104,7 +104,7 @@ def lambda_handler(event, context):  # noqa: D401
         except ValueError as e:
             return _response(400, {"error": str(e)})
 
-        region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+        region = os.environ.get("AWS_APP_REGION") or os.environ.get("AWS_DEFAULT_REGION")
         bucket = os.environ["AWS_BUCKET_NAME"]
         project = os.environ["AWS_CODEBUILD_PROJECT_NAME"]
         account_id = os.environ.get("AWS_ACCOUNT_ID")
