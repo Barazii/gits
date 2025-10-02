@@ -22,18 +22,13 @@ if [ -z "$SCHEDULE_TIME" ]; then
     exit 1
 fi
 
-# Time conversion
-if [[ "$SCHEDULE_TIME" =~ Z$ ]]; then
-    # Already in UTC
+# Time validation & conversion (strict ISO 8601 UTC format: YYYY-MM-DDTHH:MM:SSZ)
+ISO_UTC_REGEX='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+if [[ "$SCHEDULE_TIME" =~ $ISO_UTC_REGEX ]]; then
     UTC_TIME="$SCHEDULE_TIME"
 else
-    # Assume local CEST/CET time, convert to UTC
-    UTC_TIME=$(TZ="Europe/Berlin" date -d "$SCHEDULE_TIME" -u "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
-    if [ $? -ne 0 ]; then
-        echo "Error: Invalid time format. Use YYYY-MM-DDTHH:MM:SS"
-        echo "Example: gits '2025-07-17T15:00:00'"
-        exit 1
-    fi
+    echo "Error: Time must be in ISO 8601 UTC format: YYYY-MM-DDTHH:MM:SSZ (e.g. 2025-07-17T15:00:00Z)"
+    exit 1
 fi
 
 # Check if schedule time is in the past
@@ -63,10 +58,6 @@ if [[ ! "$REPO_URL" =~ ^https://.*$ ]]; then
     echo "Update your remote URL to HTTPS format using: git remote set-url origin <https-url>"
     exit 1
 fi
-
-# Generate unique identifiers
-PREFIX="changes-$(date +%s)"
-RULE_NAME="gits-$(date +%s)"
 
 # Identify modified files
 git status --porcelain | grep '^ M\|^ A\|^ D' | awk '{print $2}' > /tmp/gits-modified-files.txt
