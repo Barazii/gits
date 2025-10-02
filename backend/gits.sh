@@ -85,8 +85,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# NOTE: S3 upload moved to Lambda (no local AWS credentials needed).
-
 # Convert ISO 8601 to AWS EventBridge cron format (e.g., "2025-07-17T15:00:00Z" -> "0 15 17 7 ? 2025")
 CRON_EXPR=$(date -u -d "$UTC_TIME" "+%M %H %d %m ? %Y" 2>/dev/null)
 if [ $? -ne 0 ]; then
@@ -94,10 +92,6 @@ if [ $? -ne 0 ]; then
     rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
     exit 1
 fi
-
-###############################################
-# API Gateway + Lambda proxy call             #
-###############################################
 
 # Expect API_GATEWAY_URL in config pointing to the deployed endpoint for the Lambda proxy (POST method)
 if [ -z "$API_GATEWAY_URL" ]; then
@@ -142,7 +136,4 @@ if [ "$STATUS" != "200" ]; then
     exit 1
 fi
 
-echo "Successfully scheduled via remote Lambda: $BODY"
-
-echo "Done. Scheduled Git operations for $SCHEDULE_TIME on $REPO_URL (remote)."
-rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+echo "Successfully scheduled"

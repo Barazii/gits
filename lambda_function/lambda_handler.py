@@ -32,9 +32,12 @@ import re
 from datetime import datetime, timezone
 import time
 from typing import Any, Dict
-
+import logging
 import boto3
 
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 _ISO_RE = re.compile(
     r"^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\.\d+)?(Z|[+-][0-9]{2}:[0-9]{2})?$"
@@ -69,11 +72,14 @@ def _response(status: int, body: Dict[str, Any]) -> Dict[str, Any]:
     return {"statusCode": status, "headers": {"Content-Type": "application/json"}, "body": json.dumps(body)}
 
 
-def lambda_handler(event, context):  # noqa: D401
+def lambda_handler(event, context):
+    logger.info("Invocation start")
     try:
-        if "body" in event:  # API Gateway proxy
+        if "body" in event:
+            logger.info("Body key found.")
             body_raw = event["body"]
             if event.get("isBase64Encoded"):
+                logger.info("Message is base64 encoded.")
                 body_raw = base64.b64decode(body_raw).decode()
             data = json.loads(body_raw or "{}")
         else:
@@ -94,9 +100,6 @@ def lambda_handler(event, context):  # noqa: D401
         ] if not v]
         if missing:
             return _response(400, {"error": f"Missing required fields: {', '.join(missing)}"})
-
-        if not repo_url.startswith("https://"):
-            return _response(400, {"error": "repo_url must be HTTPS"})
 
         try:
             dt_utc = _parse_iso8601(schedule_time)
@@ -135,12 +138,7 @@ def lambda_handler(event, context):  # noqa: D401
             State="ENABLED",
         )
 
-        # Construct CodeBuild project ARN (only if not provided elsewhere)
-        if account_id:
-            cb_project_arn = f"arn:aws:codebuild:{region}:{account_id}:project/{project}"
-        else:
-            # Let EventBridge resolve by name if ARN omitted (not always allowed). Prefer explicit ARN when account known.
-            cb_project_arn = f"arn:aws:codebuild:{region}::project/{project}"  # may not work without account
+        cb_project_arn = f"arn:aws:codebuild:{region}:{account_id}:project/{project}"
 
         input_payload = {
             "environmentVariablesOverride": [
@@ -154,9 +152,8 @@ def lambda_handler(event, context):  # noqa: D401
             "Id": "Target1",
             "Arn": cb_project_arn,
             "Input": json.dumps(input_payload),
+            "RoleArn": target_role_arn,
         }
-        if target_role_arn:
-            target_def["RoleArn"] = target_role_arn
 
         events_client.put_targets(Rule=rule_name, Targets=[target_def])
 
@@ -167,5 +164,5 @@ def lambda_handler(event, context):  # noqa: D401
             "s3_path": s3_path,
         })
 
-    except Exception as e:  # pragma: no cover - broad catch to surface errors as JSON
+    except Exception as e:
         return _response(500, {"error": str(e)})
