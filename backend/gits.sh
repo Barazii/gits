@@ -85,13 +85,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Upload to S3
-aws s3 cp "$ZIP_FILE" "s3://$AWS_BUCKET_NAME/$PREFIX/$(basename "$ZIP_FILE")" --region "$AWS_REGION" >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to upload to S3."
-    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
-    exit 1
-fi
+# NOTE: S3 upload moved to Lambda (no local AWS credentials needed).
 
 # Convert ISO 8601 to AWS EventBridge cron format (e.g., "2025-07-17T15:00:00Z" -> "0 15 17 7 ? 2025")
 CRON_EXPR=$(date -u -d "$UTC_TIME" "+%M %H %d %m ? %Y" 2>/dev/null)
@@ -101,33 +95,54 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Create EventBridge rule
-aws events put-rule \
-    --name "$RULE_NAME" \
-    --schedule-expression "cron($CRON_EXPR)" \
-    --state ENABLED \
-    --region "$AWS_REGION" \
-    >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to create EventBridge rule."
+###############################################
+# API Gateway + Lambda proxy call             #
+###############################################
+
+# Expect API_GATEWAY_URL in config pointing to the deployed endpoint for the Lambda proxy (POST method)
+if [ -z "$API_GATEWAY_URL" ]; then
+    echo "Error: API_GATEWAY_URL not set in ~/.gits/config"
     rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
     exit 1
 fi
 
-# Set CodeBuild as target
-aws events put-targets --region "$AWS_REGION" --rule "$RULE_NAME" --targets '[
-  {
-    "Id": "Target1",
-    "Arn": "arn:aws:codebuild:'$AWS_REGION':482497089777:project/'$AWS_CODEBUILD_PROJECT_NAME'",
-    "RoleArn": "arn:aws:iam::482497089777:role/EventBridgeServiceRoleForCodeBuild",
-    "Input": "{\"environmentVariablesOverride\":[{\"name\":\"S3_PATH\",\"value\":\"s3://'$AWS_BUCKET_NAME'/'$PREFIX'/'$(basename "$ZIP_FILE")'\",\"type\":\"PLAINTEXT\"},{\"name\":\"REPO_URL\",\"value\":\"'$REPO_URL'\",\"type\":\"PLAINTEXT\"},{\"name\":\"GITHUB_TOKEN_SECRET\",\"value\":\"'$AWS_GITHUB_TOKEN_SECRET'\",\"type\":\"PLAINTEXT\"}]}"
-  }
-]' >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to set CodeBuild target."
+if [ -z "$AWS_GITHUB_TOKEN_SECRET" ]; then
+    echo "Error: AWS_GITHUB_TOKEN_SECRET not set in ~/.gits/config"
     rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
     exit 1
 fi
 
-echo "Successfully scheduled Git operations for $SCHEDULE_TIME on $REPO_URL."
+# Base64 encode the zip (single line)
+ZIP_B64=$(base64 -w 0 "$ZIP_FILE" 2>/dev/null)
+if [ $? -ne 0 ] || [ -z "$ZIP_B64" ]; then
+    echo "Error: Failed to base64 encode zip file."
+    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    exit 1
+fi
+
+PAYLOAD=$(cat <<EOF
+{
+  "schedule_time": "$UTC_TIME",
+  "repo_url": "$REPO_URL",
+  "zip_filename": "$(basename "$ZIP_FILE")",
+  "zip_base64": "$ZIP_B64",
+  "github_token_secret": "$AWS_GITHUB_TOKEN_SECRET"
+}
+EOF
+)
+
+# Perform HTTP POST (no AWS credentials required locally)
+HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_GATEWAY_URL" -H 'Content-Type: application/json' -d "$PAYLOAD")
+BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
+
+if [ "$STATUS" != "200" ]; then
+    echo "Error: Remote scheduling failed (status $STATUS). Response: $BODY"
+    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    exit 1
+fi
+
+echo "Successfully scheduled via remote Lambda: $BODY"
+
+echo "Done. Scheduled Git operations for $SCHEDULE_TIME on $REPO_URL (remote)."
 rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
