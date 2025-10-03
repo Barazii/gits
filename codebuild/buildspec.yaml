@@ -10,8 +10,8 @@ phases:
       # Retrieving GitHub token from AWS Secrets Manager
       - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id $GITHUB_TOKEN_SECRET --query SecretString --output text | jq -r '.Token')
       - git config --global credential.helper '!f() { echo "username=Barazii"; echo "password=$GITHUB_TOKEN"; }; f'
-      - git config --global user.email "mahmoud.baraziii@gmail.com"
-      - git config --global user.name "Barazii"
+      - git config --global user.email $GITHUB_EMAIL
+      - git config --global user.name $GITHUB_USER
   build:
     commands:
       # Cloning target repository from github

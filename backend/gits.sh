@@ -111,7 +111,9 @@ PAYLOAD=$(cat <<EOF
   "repo_url": "$REPO_URL",
   "zip_filename": "$(basename "$ZIP_FILE")",
   "zip_base64": "$ZIP_B64",
-  "github_token_secret": "$AWS_GITHUB_TOKEN_SECRET"
+  "github_token_secret": "$AWS_GITHUB_TOKEN_SECRET",
+  "github_user": "$GITHUB_USER",
+  "github_email": "$GITHUB_EMAIL"
 }
 EOF
 )

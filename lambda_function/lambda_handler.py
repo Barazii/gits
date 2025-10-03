@@ -59,6 +59,8 @@ def lambda_handler(event, context):
         zip_filename = data.get("zip_filename")
         zip_b64 = data.get("zip_base64")
         github_token_secret = data.get("github_token_secret")
+        github_user = data.get("github_user")
+        github_email = data.get("github_email")
 
         try:
             dt_utc = _parse_iso8601(schedule_time)
@@ -103,6 +105,8 @@ def lambda_handler(event, context):
                 {"name": "S3_PATH", "value": s3_path, "type": "PLAINTEXT"},
                 {"name": "REPO_URL", "value": repo_url, "type": "PLAINTEXT"},
                 {"name": "GITHUB_TOKEN_SECRET", "value": github_token_secret, "type": "PLAINTEXT"},
+                {"name": "GITHUB_USER", "value": github_user, "type": "PLAINTEXT"},
+                {"name": "GITHUB_EMAIL", "value": github_email, "type": "PLAINTEXT"}
             ]
         }
 
