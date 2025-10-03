@@ -118,7 +118,7 @@ PAYLOAD=$(cat <<EOF
 EOF
 )
 
-# Perform HTTP POST (no AWS credentials required locally)
+# Perform HTTP POST
 HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_GATEWAY_URL" -H 'Content-Type: application/json' -d "$PAYLOAD")
 BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
 STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)

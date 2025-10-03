@@ -42,17 +42,11 @@ def _response(status: int, body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def lambda_handler(event, context):
-    logger.info(f"Raw event keys: {list(event.keys())}")
     try:
-        if "body" in event:
-            logger.info("Body key found.")
-            body_raw = event["body"]
-            if event.get("isBase64Encoded"):
-                logger.info("Message is base64 encoded.")
-                body_raw = base64.b64decode(body_raw).decode()
-            data = json.loads(body_raw or "{}")
-        else:
-            data = event or {}
+        body_raw = event["body"]
+        if event.get("isBase64Encoded"):
+            body_raw = base64.b64decode(body_raw).decode()
+        data = json.loads(body_raw)
 
         schedule_time = data.get("schedule_time")
         repo_url = data.get("repo_url")

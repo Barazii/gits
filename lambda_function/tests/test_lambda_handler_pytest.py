@@ -61,9 +61,9 @@ def recorders(monkeypatch):
     return s3, events
 
 
-def invoke(payload, proxy=True):
+def invoke(payload):
     mod = _reload_module()
-    event = {'body': json.dumps(payload)} if proxy else payload
+    event = {'body': json.dumps(payload)}
     return mod.lambda_handler(event, None)
 
 

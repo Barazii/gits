@@ -7,3 +7,5 @@ Support commiting grouped files together. Still only one command gits [TIMESTAMP
 automate the deployment of lambda code.
 
 automate the unit test of the lambda code.
+
+make deploy script call the othr 2 scripts.
