@@ -29,4 +29,4 @@ fi
 sudo cp "$SRC_FILE" "$TARGET"
 sudo chmod 755 "$TARGET"
 
-echo "Installation complete."
+echo "Deployment complete."
