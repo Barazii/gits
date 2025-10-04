@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # gits: A tool to schedule Git operations for any Git repository
 # Usage: gits <schedule-time>
