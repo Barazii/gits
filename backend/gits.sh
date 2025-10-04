@@ -23,6 +23,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             echo "Usage: gits <schedule-time> [-m|--message \"commit message\"]"
+            echo "Example: gits '2025-07-17T15:00:00Z' -m 'Fix: docs'"
             exit 0
             ;;
         *)

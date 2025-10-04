@@ -14,7 +14,7 @@ ENV_VARS = {
     'EVENTBRIDGE_TARGET_ROLE_ARN': 'arn:aws:iam::123456789012:role/EBRole'
 }
 
-MODULE_PATH = 'lambda_function.lambda_handler'
+MODULE_PATH = 'lambda_function.lambda_function'
 
 
 class Recorder:
