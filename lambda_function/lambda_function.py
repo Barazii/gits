@@ -5,8 +5,8 @@ This function receives (via API Gateway) a JSON payload containing:
   repo_url: HTTPS Git repository URL
   zip_filename: Name of the zip file (string)
   zip_base64: Base64-encoded content of the zip containing modified files
-  github_token_secret: Name of the GitHub token secret in Secrets Manager. """
-
+  github_token_secret: Name of the GitHub token secret in Secrets Manager.
+"""
 
 import base64
 import json
@@ -55,6 +55,7 @@ def lambda_handler(event, context):
         github_token_secret = data.get("github_token_secret")
         github_user = data.get("github_user")
         github_email = data.get("github_email")
+        commit_message = data.get("commit_message", "")
 
         try:
             dt_utc = _parse_iso8601(schedule_time)
@@ -100,7 +101,8 @@ def lambda_handler(event, context):
                 {"name": "REPO_URL", "value": repo_url, "type": "PLAINTEXT"},
                 {"name": "GITHUB_TOKEN_SECRET", "value": github_token_secret, "type": "PLAINTEXT"},
                 {"name": "GITHUB_USER", "value": github_user, "type": "PLAINTEXT"},
-                {"name": "GITHUB_EMAIL", "value": github_email, "type": "PLAINTEXT"}
+                {"name": "GITHUB_EMAIL", "value": github_email, "type": "PLAINTEXT"},
+                {"name": "COMMIT_MESSAGE", "value": commit_message or "", "type": "PLAINTEXT"}
             ]
         }
 
@@ -119,6 +121,5 @@ def lambda_handler(event, context):
             "cron_expression": cron_expr,
             "s3_path": s3_path,
         })
-
     except Exception as e:
         return _response(500, {"error": str(e)})

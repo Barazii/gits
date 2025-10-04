@@ -4,7 +4,7 @@ phases:
   install:
     commands:
       - apt-get update
-      - apt-get install -y git unzip
+      - apt-get install -y git unzip jq
   pre_build:
     commands:
       # Retrieving GitHub token from AWS Secrets Manager
@@ -23,5 +23,6 @@ phases:
       - rm changes.zip
       # git operations
       - git add .
-      - git commit -m "Applied changes using gits" || echo "No changes to commit"
+      - 'MSG="${COMMIT_MESSAGE:-Applied changes using gits}"'
+      - git commit -m "$MSG" || echo "No changes to commit"
       - git push origin main

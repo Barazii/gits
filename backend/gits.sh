@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # gits: A tool to schedule Git operations for any Git repository
-# Usage: gits <schedule-time>
-# Example: gits "2025-07-17T15:00:00Z"
+# Usage: gits <schedule-time> [-m|--message "commit message"]
+# Example: gits "2025-07-17T15:00:00Z" -m "Fix: update readme"
 
 CONFIG_FILE="$HOME/.gits/config"
 
@@ -11,14 +11,38 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
-# Input parameter: schedule time
-SCHEDULE_TIME="$1"
+# Parse arguments
+SCHEDULE_TIME=""
+COMMIT_MESSAGE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -m|--message)
+            shift
+            COMMIT_MESSAGE="${1:-}"
+            ;;
+        -h|--help)
+            echo "Usage: gits <schedule-time> [-m|--message \"commit message\"]"
+            exit 0
+            ;;
+        *)
+            if [[ -z "$SCHEDULE_TIME" ]]; then
+                SCHEDULE_TIME="$1"
+            else
+                echo "Error: unexpected argument: $1" >&2
+                echo "Usage: gits <schedule-time> [-m|--message \"commit message\"]" >&2
+                exit 2
+            fi
+            ;;
+    esac
+    shift || true
+done
 
 # Validate input
 if [ -z "$SCHEDULE_TIME" ]; then
     echo "Error: Schedule time required."
-    echo "Usage: gits <schedule-time>"
-    echo "Example: gits '2025-07-17T15:00:00Z' (UTC time) or gits '2025-07-17T15:00:00' (CEST/CET time)"
+    echo "Usage: gits <schedule-time> [-m|--message \"commit message\"]"
+    echo "Example: gits '2025-07-17T15:00:00Z' -m 'Fix: docs'"
     exit 1
 fi
 
@@ -105,15 +129,24 @@ if [ $? -ne 0 ] || [ -z "$ZIP_B64" ]; then
     exit 1
 fi
 
+# Escape commit message for JSON
+CM_ESCAPED="$COMMIT_MESSAGE"
+CM_ESCAPED=${CM_ESCAPED//\\/\\\\}
+CM_ESCAPED=${CM_ESCAPED//\"/\\\"}
+CM_ESCAPED=${CM_ESCAPED//$'\n'/\\n}
+CM_ESCAPED=${CM_ESCAPED//$'\r'/\\r}
+CM_ESCAPED=${CM_ESCAPED//$'\t'/\\t}
+
 PAYLOAD=$(cat <<EOF
 {
-  "schedule_time": "$UTC_TIME",
-  "repo_url": "$REPO_URL",
-  "zip_filename": "$(basename "$ZIP_FILE")",
-  "zip_base64": "$ZIP_B64",
-  "github_token_secret": "$AWS_GITHUB_TOKEN_SECRET",
-  "github_user": "$GITHUB_USER",
-  "github_email": "$GITHUB_EMAIL"
+    "schedule_time": "$UTC_TIME",
+    "repo_url": "$REPO_URL",
+    "zip_filename": "$(basename "$ZIP_FILE")",
+    "zip_base64": "$ZIP_B64",
+    "github_token_secret": "$AWS_GITHUB_TOKEN_SECRET",
+    "github_user": "$GITHUB_USER",
+    "github_email": "$GITHUB_EMAIL",
+    "commit_message": "$CM_ESCAPED"
 }
 EOF
 )
