@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # gits: A tool to schedule Git operations for any Git repository
-# Usage: gits <schedule-time> [-m|--message "commit message"]
-# Example: gits "2025-07-17T15:00:00Z" -m "Fix: update readme"
+# Usage: gits <schedule-time> [-m|--message "commit message"] [-f|--file <path>]...
+# Example: gits "2025-07-17T15:00:00Z" -m "Fix: update readme" -f backend/gits.sh -f README.md
 
 CONFIG_FILE="$HOME/.gits/config"
 
@@ -14,6 +14,7 @@ fi
 # Parse arguments
 SCHEDULE_TIME=""
 COMMIT_MESSAGE=""
+declare -a FILES
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -21,9 +22,25 @@ while [[ $# -gt 0 ]]; do
             shift
             COMMIT_MESSAGE="${1:-}"
             ;;
+        -f|--file)
+            shift
+            if [[ -z "${1:-}" ]]; then
+                echo "Error: -f|--file requires a file path" >&2
+                exit 2
+            fi
+            # Support comma-separated list or multiple -f flags
+            IFS=',' read -r -a _tmpfiles <<< "${1}"
+            for _f in "${_tmpfiles[@]}"; do
+                [[ -z "$_f" ]] && continue
+                FILES+=("$_f")
+            done
+            ;;
         -h|--help)
-            echo "Usage: gits <schedule-time> [-m|--message \"commit message\"]"
-            echo "Example: gits '2025-07-17T15:00:00Z' -m 'Fix: docs'"
+            echo "Usage: gits <schedule-time> [-m|--message \"commit message\"] [-f|--file <path>]..."
+            echo "Examples:"
+            echo "  gits '2025-07-17T15:00:00Z' -m 'Fix: docs'"
+            echo "  gits '2025-07-17T15:00:00Z' -f app.py -f README.md"
+            echo "  gits '2025-07-17T15:00:00Z' -f app.py,README.md"
             exit 0
             ;;
         *)
@@ -31,7 +48,7 @@ while [[ $# -gt 0 ]]; do
                 SCHEDULE_TIME="$1"
             else
                 echo "Error: unexpected argument: $1" >&2
-                echo "Usage: gits <schedule-time> [-m|--message \"commit message\"]" >&2
+                echo "Usage: gits <schedule-time> [-m|--message \"commit message\"] [-f|--file <path>]..." >&2
                 exit 2
             fi
             ;;
@@ -42,8 +59,11 @@ done
 # Validate input
 if [ -z "$SCHEDULE_TIME" ]; then
     echo "Error: Schedule time required."
-    echo "Usage: gits <schedule-time> [-m|--message \"commit message\"]"
-    echo "Example: gits '2025-07-17T15:00:00Z' -m 'Fix: docs'"
+    echo "Usage: gits <schedule-time> [-m|--message \"commit message\"] [-f|--file <path>]..."
+    echo "Example:" 
+    echo "  gits '2025-07-17T15:00:00Z' -m 'Fix: docs'"
+    echo "  gits '2025-07-17T15:00:00Z' -f app.py -f README.md"
+    echo "  gits '2025-07-17T15:00:00Z' -f app.py,README.md"
     exit 1
 fi
 
@@ -84,20 +104,39 @@ if [[ ! "$REPO_URL" =~ ^https://.*$ ]]; then
     exit 1
 fi
 
-# Identify modified files
-git status --porcelain | grep '^ M\|^ A\|^ D' | awk '{print $2}' > /tmp/gits-modified-files.txt
-if [ ! -s /tmp/gits-modified-files.txt ]; then
-    echo "Error: No modified files found."
-    rm -f /tmp/gits-modified-files.txt
-    exit 1
+# Identify files to include
+LIST_FILE="/tmp/gits-modified-files.txt"
+rm -f "$LIST_FILE"
+
+if [[ ${#FILES[@]} -gt 0 ]]; then
+    # Validate provided files exist locally
+    _missing=0
+    for f in "${FILES[@]}"; do
+        if [[ ! -e "$f" ]]; then
+            echo "Error: specified file not found: $f" >&2
+            _missing=1
+        fi
+    done
+    if [[ $_missing -ne 0 ]]; then
+        exit 1
+    fi
+    printf '%s\n' "${FILES[@]}" > "$LIST_FILE"
+else
+    # Auto-detect modified/added files in working tree (excludes untracked '??' and deleted ' D')
+    git status --porcelain | grep '^ M\|^ A' | awk '{print $2}' > "$LIST_FILE"
+    if [ ! -s "$LIST_FILE" ]; then
+        echo "Error: No modified files found. Use -f to specify files explicitly."
+        rm -f "$LIST_FILE"
+        exit 1
+    fi
 fi
 
 # Create a zip of modified files
 ZIP_FILE="/tmp/gits-changes-$(date +%s).zip"
-cat /tmp/gits-modified-files.txt | xargs zip -r "$ZIP_FILE" >/dev/null 2>&1
+zip -r "$ZIP_FILE" -@ < "$LIST_FILE" >/dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to create zip."
-    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE"
     exit 1
 fi
 
@@ -105,20 +144,20 @@ fi
 CRON_EXPR=$(date -u -d "$UTC_TIME" "+%M %H %d %m ? %Y" 2>/dev/null)
 if [ $? -ne 0 ]; then
     echo "Error: Invalid time format."
-    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE"
     exit 1
 fi
 
 # Expect API_GATEWAY_URL in config pointing to the deployed endpoint for the Lambda proxy (POST method)
 if [ -z "$API_GATEWAY_URL" ]; then
     echo "Error: API_GATEWAY_URL not set in ~/.gits/config"
-    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE"
     exit 1
 fi
 
 if [ -z "$AWS_GITHUB_TOKEN_SECRET" ]; then
     echo "Error: AWS_GITHUB_TOKEN_SECRET not set in ~/.gits/config"
-    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE"
     exit 1
 fi
 
@@ -126,7 +165,7 @@ fi
 ZIP_B64=$(base64 -w 0 "$ZIP_FILE" 2>/dev/null)
 if [ $? -ne 0 ] || [ -z "$ZIP_B64" ]; then
     echo "Error: Failed to base64 encode zip file."
-    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE"
     exit 1
 fi
 
@@ -159,8 +198,9 @@ STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
 
 if [ "$STATUS" != "200" ]; then
     echo "Error: Remote scheduling failed (status $STATUS). Response: $BODY"
-    rm -f /tmp/gits-modified-files.txt "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE"
     exit 1
 fi
 
+rm -f "$LIST_FILE" "$ZIP_FILE"
 echo "Successfully scheduled"

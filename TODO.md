@@ -6,6 +6,6 @@ update readme file.
 
 handle files created and deleted, not only changed.
 
-add argument --file to specify which files to add. (if multiple schedules at same time what will happen?)
+add argument --file to specify which files to add. (if multiple schedules at same time what will happen?). include deleted files, unstaged, ..
 
 explore testing. more testing. robust testing. for lambda, api gateway, backend script.
