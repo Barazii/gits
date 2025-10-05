@@ -123,7 +123,7 @@ if [[ ${#FILES[@]} -gt 0 ]]; then
     printf '%s\n' "${FILES[@]}" > "$LIST_FILE"
 else
     # Auto-detect modified/added files in working tree (excludes untracked '??' and deleted ' D')
-    git status --porcelain | grep '^ M\|^ A' | awk '{print $2}' > "$LIST_FILE"
+    git status --porcelain | grep -E '^\?\? |^ M ' | awk '{print $2}' > "$LIST_FILE"
     if [ ! -s "$LIST_FILE" ]; then
         echo "Error: No modified files found. Use -f to specify files explicitly."
         rm -f "$LIST_FILE"
