@@ -21,6 +21,17 @@ phases:
       - aws s3 cp $S3_PATH changes.zip
       - unzip -o changes.zip
       - rm changes.zip
+      # Apply deletions from any manifest(s) if present (POSIX sh-compatible)
+      - |
+        for MANIFEST_FILE in .gits-manifest-*.json; do
+          [ -e "$MANIFEST_FILE" ] || continue
+          echo "Found manifest: $MANIFEST_FILE"
+          jq -r '.deleted[]? // empty' "$MANIFEST_FILE" 2>/dev/null | while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            git rm -q --ignore-unmatch -- "$path" || true
+          done
+          rm -f "$MANIFEST_FILE"
+        done
       # git operations
       - git add .
       - 'MSG="${COMMIT_MESSAGE:-Applied changes using gits}"'

@@ -104,39 +104,153 @@ if [[ ! "$REPO_URL" =~ ^https://.*$ ]]; then
     exit 1
 fi
 
-# Identify files to include
+# Identify files to include and detect deletions/renames
 LIST_FILE="/tmp/gits-modified-files.txt"
-rm -f "$LIST_FILE"
+EPOCH_TS=$(date +%s)
+MANIFEST_FILE="/tmp/.gits-manifest-${EPOCH_TS}.json"
+MANIFEST_REPO_COPY=".gits-manifest-${EPOCH_TS}.json"
+rm -f "$LIST_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
+
+# Gather git status once (with rename detection)
+GIT_STATUS=$(git status --porcelain -M)
+
+# Build sets for deletes and rename-old-sides
+declare -a DELETED_PATHS
+declare -a RENAME_OLDS
+declare -a RENAME_NEWS
+
+while IFS= read -r _line; do
+    # Deleted file in working tree: " D path"
+    if [[ "$_line" =~ ^\ D\  ]]; then
+        _p="${_line:3}"
+        DELETED_PATHS+=("$_p")
+    fi
+    # Rename: "R  old -> new"
+    if [[ "$_line" =~ ^R[[:space:]] ]]; then
+        # Extract old and new using sed (handles simple paths without newlines)
+        _pair=$(printf '%s' "$_line" | sed -E 's/^R[[:space:]]+(.+)[[:space:]]->[[:space:]](.+)$/\1|\2/')
+        _old="${_pair%%|*}"
+        _new="${_pair##*|}"
+        RENAME_OLDS+=("$_old")
+        RENAME_NEWS+=("$_new")
+    fi
+done < <(printf '%s\n' "$GIT_STATUS")
+
+# Helper: check if value is in array
+in_array() {
+    local needle="$1"; shift
+    local x
+    for x in "$@"; do [[ "$x" == "$needle" ]] && return 0; done
+    return 1
+}
+
+declare -a FILES_TO_ZIP
 
 if [[ ${#FILES[@]} -gt 0 ]]; then
-    # Validate provided files exist locally
+    # Validate provided files: allow missing if they are deleted/renamed according to git status
     _missing=0
     for f in "${FILES[@]}"; do
-        if [[ ! -e "$f" ]]; then
-            echo "Error: specified file not found: $f" >&2
-            _missing=1
+        if [[ -e "$f" ]]; then
+            FILES_TO_ZIP+=("$f")
+            continue
         fi
+        # Not present on disk: check if it's a deleted path or part of a rename
+        if in_array "$f" "${DELETED_PATHS[@]}" || in_array "$f" "${RENAME_OLDS[@]}" || in_array "$f" "${RENAME_NEWS[@]}"; then
+            # It's a deletion or a rename side; don't add to zip, will add to manifest
+            continue
+        fi
+        echo "Error: specified file not found and not recognized as deleted or renamed: $f" >&2
+        _missing=1
     done
     if [[ $_missing -ne 0 ]]; then
         exit 1
     fi
-    printf '%s\n' "${FILES[@]}" > "$LIST_FILE"
 else
-    # Auto-detect modified/added files in working tree (excludes untracked '??' and deleted ' D')
-    git status --porcelain | grep -E '^\?\? |^ M ' | awk '{print $2}' > "$LIST_FILE"
-    if [ ! -s "$LIST_FILE" ]; then
-        echo "Error: No modified files found. Use -f to specify files explicitly."
-        rm -f "$LIST_FILE"
+    # Auto-detect modified/added files in working tree (include untracked and modified)
+    # Keep behavior for content to zip; deletions handled via manifest below
+    mapfile -t FILES_TO_ZIP < <(git status --porcelain | grep -E '^\?\? |^ M ' | awk '{print $2}')
+    # Include the new side of renames so content is present in the zip
+    for i in "${!RENAME_NEWS[@]}"; do
+        _new="${RENAME_NEWS[$i]}"
+        if [[ -e "$_new" ]]; then in_array "$_new" "${FILES_TO_ZIP[@]}" || FILES_TO_ZIP+=("$_new"); fi
+    done
+    if [[ ${#FILES_TO_ZIP[@]} -eq 0 && ${#DELETED_PATHS[@]} -eq 0 && ${#RENAME_OLDS[@]} -eq 0 ]]; then
+        echo "No changes found."
         exit 1
     fi
 fi
 
-# Create a zip of modified files
+# Filter deletions/renames to the user-specified set when -f provided
+declare -a DELETES_FOR_MANIFEST
+if [[ ${#FILES[@]} -gt 0 ]]; then
+    for d in "${DELETED_PATHS[@]}"; do
+        if in_array "$d" "${FILES[@]}"; then
+            DELETES_FOR_MANIFEST+=("$d")
+        fi
+    done
+    for i in "${!RENAME_OLDS[@]}"; do
+        _old="${RENAME_OLDS[$i]}"; _new="${RENAME_NEWS[$i]}"
+        if in_array "$_old" "${FILES[@]}" || in_array "$_new" "${FILES[@]}"; then
+            # Ensure new path content is included when available
+            if [[ -e "$_new" ]]; then in_array "$_new" "${FILES_TO_ZIP[@]}" || FILES_TO_ZIP+=("$_new"); fi
+            DELETES_FOR_MANIFEST+=("$_old")
+        fi
+    done
+else
+    # Include all deletions and rename-old paths
+    DELETES_FOR_MANIFEST=("${DELETED_PATHS[@]}")
+    for _old in "${RENAME_OLDS[@]}"; do DELETES_FOR_MANIFEST+=("$_old"); done
+fi
+
+# De-duplicate FILES_TO_ZIP and DELETES_FOR_MANIFEST
+dedup_array() {
+    declare -A seen
+    local out=()
+    local item
+    for item in "$@"; do
+        [[ -z "$item" ]] && continue
+        if [[ -z "${seen[$item]}" ]]; then
+            seen[$item]=1
+            out+=("$item")
+        fi
+    done
+    printf '%s\n' "${out[@]}"
+}
+
+mapfile -t FILES_TO_ZIP < <(dedup_array "${FILES_TO_ZIP[@]}")
+mapfile -t DELETES_FOR_MANIFEST < <(dedup_array "${DELETES_FOR_MANIFEST[@]}")
+
+# Prepare list file to zip
+if [[ ${#FILES_TO_ZIP[@]} -gt 0 ]]; then
+    printf '%s\n' "${FILES_TO_ZIP[@]}" > "$LIST_FILE"
+else
+    # Touch an empty list for now; we'll still include the manifest below
+    : > "$LIST_FILE"
+fi
+
+# Build manifest JSON capturing deletions (and implicitly renames via old paths)
+{
+    echo '{'
+    echo '  "deleted": ['
+    for i in "${!DELETES_FOR_MANIFEST[@]}"; do
+        p="${DELETES_FOR_MANIFEST[$i]}"
+        printf '    "%s"' "${p//\"/\\\"}"
+        if [[ $i -lt $((${#DELETES_FOR_MANIFEST[@]} - 1)) ]]; then echo ','; else echo; fi
+    done
+    echo '  ]'
+    echo '}'
+} > "$MANIFEST_FILE"
+
+# Always include the manifest in the zip at repo root so CodeBuild can apply deletions
+cp "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
+echo "$MANIFEST_REPO_COPY" >> "$LIST_FILE"
+
+# Create a zip of modified files + manifest
 ZIP_FILE="/tmp/gits-changes-$(date +%s).zip"
 zip -r "$ZIP_FILE" -@ < "$LIST_FILE" >/dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to create zip."
-    rm -f "$LIST_FILE" "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
     exit 1
 fi
 
@@ -198,9 +312,9 @@ STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
 
 if [ "$STATUS" != "200" ]; then
     echo "Error: Remote scheduling failed (status $STATUS). Response: $BODY"
-    rm -f "$LIST_FILE" "$ZIP_FILE"
+    rm -f "$LIST_FILE" "$ZIP_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
     exit 1
 fi
 
-rm -f "$LIST_FILE" "$ZIP_FILE"
+rm -f "$LIST_FILE" "$ZIP_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
 echo "Successfully scheduled"
