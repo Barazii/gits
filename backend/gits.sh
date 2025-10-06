@@ -109,7 +109,10 @@ LIST_FILE="/tmp/gits-modified-files.txt"
 EPOCH_TS=$(date +%s)
 MANIFEST_FILE="/tmp/.gits-manifest-${EPOCH_TS}.json"
 MANIFEST_REPO_COPY=".gits-manifest-${EPOCH_TS}.json"
-rm -f "$LIST_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
+
+cleanup() {
+  rm -f "$LIST_FILE" "$ZIP_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
+}
 
 # Gather git status once (with rename detection)
 GIT_STATUS=$(git status --porcelain -M)
@@ -120,19 +123,21 @@ declare -a RENAME_OLDS
 declare -a RENAME_NEWS
 
 while IFS= read -r _line; do
-    # Deleted file in working tree: " D path"
-    if [[ "$_line" =~ ^\ D\  ]]; then
+    X="${_line:0:1}"; Y="${_line:1:1}"
+
+    # Deleted file in working tree: " D path" or "D  path"
+    if [[ "$X" == "D" || "$Y" == "D" ]]; then
         _p="${_line:3}"
         DELETED_PATHS+=("$_p")
     fi
+
     # Rename: "R  old -> new"
-    if [[ "$_line" =~ ^R[[:space:]] ]]; then
+    if [[ "$X" == "R" || "$Y" == "R" ]]; then
         # Extract old and new using sed (handles simple paths without newlines)
-        _pair=$(printf '%s' "$_line" | sed -E 's/^R[[:space:]]+(.+)[[:space:]]->[[:space:]](.+)$/\1|\2/')
-        _old="${_pair%%|*}"
-        _new="${_pair##*|}"
-        RENAME_OLDS+=("$_old")
-        RENAME_NEWS+=("$_new")
+        rest="${_line:3}"
+        _pair=$(printf '%s' "$rest" | sed -E 's/^(.+)[[:space:]]->[[:space:]](.+)$/\1|\2/')
+        _old="${_pair%%|*}"; _new="${_pair##*|}"
+        RENAME_OLDS+=("$_old"); RENAME_NEWS+=("$_new")
     fi
 done < <(printf '%s\n' "$GIT_STATUS")
 
@@ -148,7 +153,6 @@ declare -a FILES_TO_ZIP
 
 if [[ ${#FILES[@]} -gt 0 ]]; then
     # Validate provided files: allow missing if they are deleted/renamed according to git status
-    _missing=0
     for f in "${FILES[@]}"; do
         if [[ -e "$f" ]]; then
             FILES_TO_ZIP+=("$f")
@@ -159,16 +163,13 @@ if [[ ${#FILES[@]} -gt 0 ]]; then
             # It's a deletion or a rename side; don't add to zip, will add to manifest
             continue
         fi
-        echo "Error: specified file not found and not recognized as deleted or renamed: $f" >&2
-        _missing=1
-    done
-    if [[ $_missing -ne 0 ]]; then
+        echo "Error: file not found: $f" >&2
         exit 1
-    fi
+    done
 else
-    # Auto-detect modified/added files in working tree (include untracked and modified)
+    # Auto-detect modified/deleted files in working tree (include untracked and modified)
     # Keep behavior for content to zip; deletions handled via manifest below
-    mapfile -t FILES_TO_ZIP < <(git status --porcelain | grep -E '^\?\? |^ M ' | awk '{print $2}')
+    mapfile -t FILES_TO_ZIP < <(git status --porcelain | grep -E '^\?\? |^.M |^M. ' | awk '{print $2}')
     # Include the new side of renames so content is present in the zip
     for i in "${!RENAME_NEWS[@]}"; do
         _new="${RENAME_NEWS[$i]}"
@@ -190,7 +191,7 @@ if [[ ${#FILES[@]} -gt 0 ]]; then
     done
     for i in "${!RENAME_OLDS[@]}"; do
         _old="${RENAME_OLDS[$i]}"; _new="${RENAME_NEWS[$i]}"
-        if in_array "$_old" "${FILES[@]}" || in_array "$_new" "${FILES[@]}"; then
+        if in_array "$_old" "${FILES[@]}" && in_array "$_new" "${FILES[@]}"; then
             # Ensure new path content is included when available
             if [[ -e "$_new" ]]; then in_array "$_new" "${FILES_TO_ZIP[@]}" || FILES_TO_ZIP+=("$_new"); fi
             DELETES_FOR_MANIFEST+=("$_old")
@@ -250,7 +251,7 @@ ZIP_FILE="/tmp/gits-changes-$(date +%s).zip"
 zip -r "$ZIP_FILE" -@ < "$LIST_FILE" >/dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to create zip."
-    rm -f "$LIST_FILE" "$ZIP_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
+    cleanup
     exit 1
 fi
 
@@ -258,20 +259,20 @@ fi
 CRON_EXPR=$(date -u -d "$UTC_TIME" "+%M %H %d %m ? %Y" 2>/dev/null)
 if [ $? -ne 0 ]; then
     echo "Error: Invalid time format."
-    rm -f "$LIST_FILE" "$ZIP_FILE"
+    cleanup
     exit 1
 fi
 
 # Expect API_GATEWAY_URL in config pointing to the deployed endpoint for the Lambda proxy (POST method)
 if [ -z "$API_GATEWAY_URL" ]; then
     echo "Error: API_GATEWAY_URL not set in ~/.gits/config"
-    rm -f "$LIST_FILE" "$ZIP_FILE"
+    cleanup
     exit 1
 fi
 
 if [ -z "$AWS_GITHUB_TOKEN_SECRET" ]; then
     echo "Error: AWS_GITHUB_TOKEN_SECRET not set in ~/.gits/config"
-    rm -f "$LIST_FILE" "$ZIP_FILE"
+    cleanup
     exit 1
 fi
 
@@ -279,7 +280,7 @@ fi
 ZIP_B64=$(base64 -w 0 "$ZIP_FILE" 2>/dev/null)
 if [ $? -ne 0 ] || [ -z "$ZIP_B64" ]; then
     echo "Error: Failed to base64 encode zip file."
-    rm -f "$LIST_FILE" "$ZIP_FILE"
+    cleanup
     exit 1
 fi
 
@@ -312,9 +313,9 @@ STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
 
 if [ "$STATUS" != "200" ]; then
     echo "Error: Remote scheduling failed (status $STATUS). Response: $BODY"
-    rm -f "$LIST_FILE" "$ZIP_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
+    cleanup
     exit 1
 fi
 
-rm -f "$LIST_FILE" "$ZIP_FILE" "$MANIFEST_FILE" "$MANIFEST_REPO_COPY"
+cleanup
 echo "Successfully scheduled"
