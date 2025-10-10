@@ -6,6 +6,7 @@ This function receives (via API Gateway) a JSON payload containing:
   zip_filename: Name of the zip file (string)
   zip_base64: Base64-encoded content of the zip containing modified files
   github_token_secret: Name of the GitHub token secret in Secrets Manager.
+  user_id: User identifier (string)
 """
 
 import base64
@@ -56,6 +57,7 @@ def lambda_handler(event, context):
         github_user = data.get("github_user")
         github_email = data.get("github_email")
         commit_message = data.get("commit_message", "")
+        user_id = data.get("user_id")
 
         try:
             dt_utc = _parse_iso8601(schedule_time)
@@ -102,7 +104,8 @@ def lambda_handler(event, context):
                 {"name": "GITHUB_TOKEN_SECRET", "value": github_token_secret, "type": "PLAINTEXT"},
                 {"name": "GITHUB_USER", "value": github_user, "type": "PLAINTEXT"},
                 {"name": "GITHUB_EMAIL", "value": github_email, "type": "PLAINTEXT"},
-                {"name": "COMMIT_MESSAGE", "value": commit_message or "", "type": "PLAINTEXT"}
+                {"name": "COMMIT_MESSAGE", "value": commit_message or "", "type": "PLAINTEXT"},
+                {"name": "USER_ID", "value": user_id, "type": "PLAINTEXT"}
             ]
         }
 

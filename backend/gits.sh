@@ -276,6 +276,12 @@ if [ -z "$AWS_GITHUB_TOKEN_SECRET" ]; then
     exit 1
 fi
 
+if [ -z "$USER_ID" ]; then
+    echo "Error: USER_ID not set in ~/.gits/config"
+    cleanup
+    exit 1
+fi
+
 # Base64 encode the zip (single line)
 ZIP_B64=$(base64 -w 0 "$ZIP_FILE" 2>/dev/null)
 if [ $? -ne 0 ] || [ -z "$ZIP_B64" ]; then
@@ -301,7 +307,8 @@ PAYLOAD=$(cat <<EOF
     "github_token_secret": "$AWS_GITHUB_TOKEN_SECRET",
     "github_user": "$GITHUB_USER",
     "github_email": "$GITHUB_EMAIL",
-    "commit_message": "$CM_ESCAPED"
+    "commit_message": "$CM_ESCAPED",
+    "user_id": "$USER_ID"
 }
 EOF
 )
