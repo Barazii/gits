@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 # Deploy the backend gits.sh to a system-wide executable.
 # Usage:

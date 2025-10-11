@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-# Update function code.
+# Update function code for codebuildlense lambda.
 # Usage:
-#   ./deployment/deploy_lambda.sh [--publish]
+#   ./deployment/deploy_codebuildlense_lambda.sh [--publish]
 
 
-FUNCTION_NAME="gitsops"
+FUNCTION_NAME="codebuildlense"
 REGION="eu-north-1"
 
 PUBLISH_FLAG=""
@@ -18,10 +17,10 @@ done
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
-SRC_DIR="$ROOT_DIR/lambda_function"
+SRC_DIR="$ROOT_DIR/codebuildlense_lambda"
 HANDLER_FILE="$SRC_DIR/lambda_function.py"
 BUILD_DIR="$ROOT_DIR/.dist"
-ZIP_FILE="$BUILD_DIR/lambda_code.zip"
+ZIP_FILE="$BUILD_DIR/codebuildlense_lambda_code.zip"
 
 if [[ ! -f "$HANDLER_FILE" ]]; then
   echo "Error: handler not found at $HANDLER_FILE" >&2

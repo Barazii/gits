@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 # Wrapper to run both backend and lambda deployments.
 # Usage:
-#   ./deployment/deploy.sh [--publish] [--backend-only | --lambda-only]
+#   ./deployment/deploy.sh [--publish] [--backend-only | --lambda-only | --codebuildlense-only]
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BACKEND_SCRIPT="$SCRIPT_DIR/deploy_backend.sh"
-LAMBDA_SCRIPT="$SCRIPT_DIR/deploy_lambda.sh"
+LAMBDA_SCRIPT="$SCRIPT_DIR/deploy_gitsops_lambda.sh"
+CODEBUILDLENSE_SCRIPT="$SCRIPT_DIR/deploy_codebuildlense_lambda.sh"
 
 RUN_BACKEND=true
 RUN_LAMBDA=true
+RUN_CODEBUILDLENSE=true
 LAMBDA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -21,18 +22,25 @@ while [[ $# -gt 0 ]]; do
 		--backend-only)
 			RUN_BACKEND=true
 			RUN_LAMBDA=false
+			RUN_CODEBUILDLENSE=false
 			;;
 		--lambda-only)
 			RUN_BACKEND=false
 			RUN_LAMBDA=true
+			RUN_CODEBUILDLENSE=false
+			;;
+		--codebuildlense-only)
+			RUN_BACKEND=false
+			RUN_LAMBDA=false
+			RUN_CODEBUILDLENSE=true
 			;;
 		-h|--help)
-			echo "Usage: $0 [--publish] [--backend-only | --lambda-only]"
+			echo "Usage: $0 [--publish] [--backend-only | --lambda-only | --codebuildlense-only]"
 			exit 0
 			;;
 		*)
 			echo "Unknown argument: $1" >&2
-			echo "Usage: $0 [--publish] [--backend-only | --lambda-only]" >&2
+			echo "Usage: $0 [--publish] [--backend-only | --lambda-only | --codebuildlense-only]" >&2
 			exit 2
 			;;
 	esac
@@ -42,8 +50,9 @@ done
 # Ensure scripts exist and are executable
 [[ ! -f "$BACKEND_SCRIPT" ]] && { echo "Error: $BACKEND_SCRIPT not found" >&2; exit 1; }
 [[ ! -f "$LAMBDA_SCRIPT" ]] && { echo "Error: $LAMBDA_SCRIPT not found" >&2; exit 1; }
+[[ ! -f "$CODEBUILDLENSE_SCRIPT" ]] && { echo "Error: $CODEBUILDLENSE_SCRIPT not found" >&2; exit 1; }
 
-chmod +x "$BACKEND_SCRIPT" "$LAMBDA_SCRIPT"
+chmod +x "$BACKEND_SCRIPT" "$LAMBDA_SCRIPT" "$CODEBUILDLENSE_SCRIPT"
 
 if $RUN_BACKEND; then
 	echo "==> Deploying backend"
@@ -51,8 +60,13 @@ if $RUN_BACKEND; then
 fi
 
 if $RUN_LAMBDA; then
-	echo "==> Deploying Lambda"
+	echo "==> Deploying GitsOps Lambda"
 	"$LAMBDA_SCRIPT" "${LAMBDA_ARGS[@]}"
+fi
+
+if $RUN_CODEBUILDLENSE; then
+	echo "==> Deploying CodeBuild Lense Lambda"
+	"$CODEBUILDLENSE_SCRIPT" "${LAMBDA_ARGS[@]}"
 fi
 
 echo "All requested deployments completed."
