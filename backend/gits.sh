@@ -15,6 +15,7 @@ fi
 SCHEDULE_TIME=""
 COMMIT_MESSAGE=""
 declare -a FILES
+STATUS_ARG=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -43,6 +44,9 @@ while [[ $# -gt 0 ]]; do
             echo "  gits '2025-07-17T15:00:00Z' -f app.py,README.md"
             exit 0
             ;;
+        --status)
+            STATUS_ARG=true
+            ;;
         *)
             if [[ -z "$SCHEDULE_TIME" ]]; then
                 SCHEDULE_TIME="$1"
@@ -55,6 +59,29 @@ while [[ $# -gt 0 ]]; do
     esac
     shift || true
 done
+
+if $STATUS_ARG; then
+    if [ -z "$API_GATEWAY_URL" ]; then
+        echo "Error: API_GATEWAY_URL not set in ~/.gits/config"
+        exit 1
+    fi
+    if [ -z "$USER_ID" ]; then
+        echo "Error: USER_ID not set in ~/.gits/config"
+        exit 1
+    fi
+    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" "$API_GATEWAY_URL/status?user_id=$USER_ID")
+    BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+    STATUS_CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
+    if [ "$STATUS_CODE" != "200" ]; then
+        echo "server error "$STATUS_CODE""
+        exit 1
+    fi
+    SCHEDULE_TIME=$(echo "$BODY" | jq -r '.schedule_time')
+    STATUS=$(echo "$BODY" | jq -r '.status')
+    echo "Schedule Time: $SCHEDULE_TIME"
+    echo "Status: $STATUS"
+    exit 0
+fi
 
 # Validate input
 if [ -z "$SCHEDULE_TIME" ]; then
@@ -314,7 +341,7 @@ EOF
 )
 
 # Perform HTTP POST
-HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_GATEWAY_URL" -H 'Content-Type: application/json' -d "$PAYLOAD")
+HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_GATEWAY_URL/schedule" -H 'Content-Type: application/json' -d "$PAYLOAD")
 BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
 STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
 

@@ -16,14 +16,7 @@ def lambda_handler(event, context):
     try:
         logger.info(f"Received event: {json.dumps(event)}")
         # Extract user_id from event (assuming it's passed in the body or directly)
-        if 'body' in event:
-            if event.get('isBase64Encoded'):
-                body = json.loads(base64.b64decode(event['body']).decode())
-            else:
-                body = json.loads(event['body'])
-            user_id = body.get('user_id')
-        else:
-            user_id = event.get('user_id')
+        user_id = event['queryStringParameters']['user_id']
 
         if not user_id:
             return {
