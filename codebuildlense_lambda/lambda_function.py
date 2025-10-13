@@ -53,11 +53,30 @@ def lambda_handler(event, context):
             return {'statusCode': 500, 'body': 'Configuration error'}
 
         table = dynamodb.Table(table_name)
-        table.put_item(Item={
-            'user_id': user_id,
-            'build_id': build_id,
-            'build_status': build_status
-        })
+
+        # Query for the most recent item by user_id and added_at
+        response = table.query(
+            KeyConditionExpression=boto3.dynamodb.conditions.Key('user_id').eq(user_id),
+            ScanIndexForward=False,  # Descending order to get most recent
+            Limit=1
+        )
+
+        if not response['Items']:
+            logger.error(f"No item found for user {user_id}")
+            return {'statusCode': 404, 'body': 'No item found'}
+
+        item = response['Items'][0]
+
+        # Update the status of the most recent item
+        table.update_item(
+            Key={
+                'user_id': user_id,
+                'added_at': item['added_at']
+            },
+            UpdateExpression='SET #s = :val',
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':val': build_status}
+        )
 
         logger.info(f"Stored build info for user {user_id}: build_id={build_id}, status={build_status}")
         return {'statusCode': 200, 'body': 'Success'}

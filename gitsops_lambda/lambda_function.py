@@ -118,6 +118,18 @@ def lambda_handler(event, context):
 
         events_client.put_targets(Rule=rule_name, Targets=[target_def])
 
+        # Create DB item
+        dynamodb = boto3.resource('dynamodb', region_name=region)
+        table_name = os.environ.get('DYNAMODB_TABLE')
+        if table_name:
+            table = dynamodb.Table(table_name)
+            table.put_item(Item={
+                'user_id': user_id,
+                'schedule_time': schedule_time,
+                'status': 'pending',
+                'added_at': int(time.time())
+            })
+
         return _response(200, {
             "message": "Scheduled",
             "rule_name": rule_name,
