@@ -16,6 +16,7 @@ SCHEDULE_TIME=""
 COMMIT_MESSAGE=""
 declare -a FILES
 STATUS_ARG=false
+DELETE_JOB_ID=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -38,14 +39,26 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             echo "Usage: gits <schedule-time> [-m|--message \"commit message\"] [-f|--file <path>]..."
+            echo "       gits --status"
+            echo "       gits --delete <job_id>"
             echo "Examples:"
             echo "  gits '2025-07-17T15:00:00Z' -m 'Fix: docs'"
             echo "  gits '2025-07-17T15:00:00Z' -f app.py -f README.md"
             echo "  gits '2025-07-17T15:00:00Z' -f app.py,README.md"
+            echo "  gits --status"
+            echo "  gits --delete job-123"
             exit 0
             ;;
         --status)
             STATUS_ARG=true
+            ;;
+        --delete)
+            shift
+            if [[ -z "${1:-}" ]]; then
+                echo "Error: --delete requires a job_id" >&2
+                exit 2
+            fi
+            DELETE_JOB_ID="$1"
             ;;
         *)
             if [[ -z "$SCHEDULE_TIME" ]]; then
@@ -78,8 +91,37 @@ if $STATUS_ARG; then
     fi
     SCHEDULE_TIME=$(echo "$BODY" | jq -r '.schedule_time')
     STATUS=$(echo "$BODY" | jq -r '.status')
+    JOB_ID=$(echo "$BODY" | jq -r '.job_id')
+    echo "Job ID: $JOB_ID"
     echo "Schedule Time: $SCHEDULE_TIME"
     echo "Status: $STATUS"
+    exit 0
+fi
+
+if [ -n "$DELETE_JOB_ID" ]; then
+    if [ -z "$API_GATEWAY_URL" ]; then
+        echo "Error: API_GATEWAY_URL not set in ~/.gits/config"
+        exit 1
+    fi
+    if [ -z "$USER_ID" ]; then
+        echo "Error: USER_ID not set in ~/.gits/config"
+        exit 1
+    fi
+    PAYLOAD=$(cat <<EOF
+{
+    "job_id": "$DELETE_JOB_ID",
+    "user_id": "$USER_ID"
+}
+EOF
+)
+    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_GATEWAY_URL/delete" -H 'Content-Type: application/json' -d "$PAYLOAD")
+    BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+    STATUS_CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
+    if [ "$STATUS_CODE" != "200" ]; then
+        echo "Error: Delete failed (status $STATUS_CODE). Response: $BODY"
+        exit 1
+    fi
+    echo "Job deleted successfully"
     exit 0
 fi
 

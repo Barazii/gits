@@ -15,3 +15,4 @@ what are manual test cases?
 13. dont use arg --file with staged and unstaged files. expect: success.  
 14. use duplicate arg --message. expect: ?
 15. use arg --file with duplicate files. expect: success. 
+16. schedule 2 posts at same time. expect: success

@@ -125,6 +125,7 @@ def lambda_handler(event, context):
             table = dynamodb.Table(table_name)
             table.put_item(Item={
                 'user_id': user_id,
+                'job_id': rule_name,
                 'schedule_time': schedule_time,
                 'status': 'pending',
                 'added_at': int(time.time())

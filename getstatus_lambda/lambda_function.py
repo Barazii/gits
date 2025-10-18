@@ -52,10 +52,12 @@ def lambda_handler(event, context):
         item = response['Items'][0]
         schedule_time = item.get('schedule_time')
         status = item.get('status')
+        job_id = item.get('job_id')
 
         return {
             'statusCode': 200,
             'body': json.dumps({
+                'job_id': job_id,
                 'schedule_time': schedule_time,
                 'status': status
             })
