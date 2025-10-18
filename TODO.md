@@ -8,8 +8,4 @@ update readme file.
 
 add support to ssh repo (not only http)
 
-implement --delete arg
-
 stress test (shedule more than one job, then retrieve; check retrieving order, ...etc)
-
-for --status check if current repo is git repo before fetching.

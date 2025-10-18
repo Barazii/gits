@@ -28,18 +28,21 @@ while [[ $# -gt 0 ]]; do
 			RUN_LAMBDA=false
 			RUN_CODEBUILDLENSE=false
 			RUN_GETSTATUS=false
+			RUN_DELETE=false
 			;;
 		--lambda-only)
 			RUN_BACKEND=false
 			RUN_LAMBDA=true
 			RUN_CODEBUILDLENSE=false
 			RUN_GETSTATUS=false
+			RUN_DELETE=false
 			;;
 		--codebuildlense-only)
 			RUN_BACKEND=false
 			RUN_LAMBDA=false
 			RUN_CODEBUILDLENSE=true
 			RUN_GETSTATUS=false
+			RUN_DELETE=false
 			;;
 		--getstatus-only)
 			RUN_BACKEND=false

@@ -74,6 +74,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 if $STATUS_ARG; then
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "Error: Not a git repository"
+        exit 1
+    fi
     if [ -z "$API_GATEWAY_URL" ]; then
         echo "Error: API_GATEWAY_URL not set in ~/.gits/config"
         exit 1
@@ -86,7 +90,7 @@ if $STATUS_ARG; then
     BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
     STATUS_CODE=$(echo "$HTTP_RESPONSE" | tail -n1)
     if [ "$STATUS_CODE" != "200" ]; then
-        echo "server error "$STATUS_CODE""
+        echo ""$BODY""
         exit 1
     fi
     SCHEDULE_TIME=$(echo "$BODY" | jq -r '.schedule_time')
@@ -99,6 +103,10 @@ if $STATUS_ARG; then
 fi
 
 if [ -n "$DELETE_JOB_ID" ]; then
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "Error: Not a git repository"
+        exit 1
+    fi
     if [ -z "$API_GATEWAY_URL" ]; then
         echo "Error: API_GATEWAY_URL not set in ~/.gits/config"
         exit 1
