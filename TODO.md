@@ -8,4 +8,8 @@ update readme file.
 
 add support to ssh repo (not only http)
 
-stress test (shedule more than one job, then retrieve; check retrieving order, ...etc)
+stress test
+
+make the github api token in the config file, not aws secret manager. 
+
+deployment to users on their machines. installation on their machines.
