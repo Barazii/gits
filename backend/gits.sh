@@ -22,7 +22,12 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -m|--message)
             shift
-            COMMIT_MESSAGE="${1:-}"
+            if [[ $# -eq 0 ]] || [[ "$1" =~ ^- ]]; then
+                echo "Error: -m|--message requires a commit message" >&2
+                exit 2
+            fi
+            COMMIT_MESSAGE="$1"
+            shift
             ;;
         -f|--file)
             shift
