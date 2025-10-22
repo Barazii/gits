@@ -13,3 +13,9 @@ stress test
 make the github api token in the config file, not aws secret manager. 
 
 deployment to users on their machines. installation on their machines.
+
+make check for git repo and config variables defined at begining of program run
+
+create bash script to automate running user testcases. so: first compile. then run the execuable in different testcases. get output compare it with expected results.
+
+duplicate check of current git repo

@@ -3,3 +3,6 @@ __pycache__
 
 # Ignore ephemeral gits manifest files
 .gits-manifest-*.json
+
+
+gits
