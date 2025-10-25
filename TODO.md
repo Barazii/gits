@@ -19,3 +19,5 @@ make check for git repo and config variables defined at begining of program run
 create bash script to automate running user testcases. so: first compile. then run the execuable in different testcases. get output compare it with expected results.
 
 gits.cpp: duplicate check of current git repo
+
+make the cpp docker components do logging properly.
