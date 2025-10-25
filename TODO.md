@@ -21,3 +21,13 @@ create bash script to automate running user testcases. so: first compile. then r
 gits.cpp: duplicate check of current git repo
 
 make the cpp docker components do logging properly.
+
+make --status --log. make --delete --deschedule. 
+
+for status lambda and schedule lambda, in the deploy scripts, avoid error of already exist ECR repo.
+
+add logging for all lambdas (status and schedule left)
+
+make all lambda's docker use the same image.
+
+update the deployment folder scripts.
