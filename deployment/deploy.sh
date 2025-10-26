@@ -5,7 +5,8 @@
 #   ./deployment/deploy.sh [--publish] [--backend-only | --lambda-only | --codebuildlense-only | --getstatus-only]
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-BACKEND_SCRIPT="$SCRIPT_DIR/deploy_backend.sh"
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+BACKEND_DIR="$ROOT_DIR/backend"
 LAMBDA_SCRIPT="$SCRIPT_DIR/../gitsops_lambda/deploy.sh"
 CODEBUILDLENSE_SCRIPT="$SCRIPT_DIR/../codebuildlense_lambda/deploy.sh"
 GETSTATUS_SCRIPT="$SCRIPT_DIR/../getstatus_lambda/deploy.sh"
@@ -72,17 +73,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Ensure scripts exist and are executable
-[[ ! -f "$BACKEND_SCRIPT" ]] && { echo "Error: $BACKEND_SCRIPT not found" >&2; exit 1; }
 [[ ! -f "$LAMBDA_SCRIPT" ]] && { echo "Error: $LAMBDA_SCRIPT not found" >&2; exit 1; }
 [[ ! -f "$CODEBUILDLENSE_SCRIPT" ]] && { echo "Error: $CODEBUILDLENSE_SCRIPT not found" >&2; exit 1; }
 [[ ! -f "$GETSTATUS_SCRIPT" ]] && { echo "Error: $GETSTATUS_SCRIPT not found" >&2; exit 1; }
 [[ ! -f "$DELETE_SCRIPT" ]] && { echo "Error: $DELETE_SCRIPT not found" >&2; exit 1; }
 
-chmod +x "$BACKEND_SCRIPT" "$LAMBDA_SCRIPT" "$CODEBUILDLENSE_SCRIPT" "$GETSTATUS_SCRIPT" "$DELETE_SCRIPT"
+chmod +x "$LAMBDA_SCRIPT" "$CODEBUILDLENSE_SCRIPT" "$GETSTATUS_SCRIPT" "$DELETE_SCRIPT"
 
 if $RUN_BACKEND; then
 	echo "==> Deploying backend"
-	"$BACKEND_SCRIPT" || { echo "Backend deployment failed" >&2; exit 1; }
+	cd "$BACKEND_DIR" && make build && make install || { echo "Backend deployment failed" >&2; exit 1; }
 fi
 
 if $RUN_LAMBDA; then

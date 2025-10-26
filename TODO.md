@@ -16,8 +16,6 @@ gits.cpp: duplicate check of current git repo       <-
 
 make --status --log. make --delete --deschedule. 
 
-make all lambda's docker use the same image.
-
 fix the names mess. 
 
 make --status equivalnet to -s and --delete to -d
