@@ -1,1 +1,0 @@
-g++ -std=c++17 gits.cpp -o gits -lcurl -lssl -lcrypto -lzip

@@ -6,10 +6,10 @@
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BACKEND_SCRIPT="$SCRIPT_DIR/deploy_backend.sh"
-LAMBDA_SCRIPT="$SCRIPT_DIR/../gitsops_lambda/cpp/deploy.sh"
-CODEBUILDLENSE_SCRIPT="$SCRIPT_DIR/../codebuildlense_lambda/cpp/deploy.sh"
-GETSTATUS_SCRIPT="$SCRIPT_DIR/../getstatus_lambda/cpp/deploy.sh"
-DELETE_SCRIPT="$SCRIPT_DIR/../delete_lambda/cpp/deploy.sh"
+LAMBDA_SCRIPT="$SCRIPT_DIR/../gitsops_lambda/deploy.sh"
+CODEBUILDLENSE_SCRIPT="$SCRIPT_DIR/../codebuildlense_lambda/deploy.sh"
+GETSTATUS_SCRIPT="$SCRIPT_DIR/../getstatus_lambda/deploy.sh"
+DELETE_SCRIPT="$SCRIPT_DIR/../delete_lambda/deploy.sh"
 
 RUN_BACKEND=true
 RUN_LAMBDA=true

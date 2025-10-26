@@ -258,7 +258,8 @@ bool validate_schedule_time(const std::string& time_str) {
         std::cerr << "Error: Invalid time format." << std::endl;
         return false;
     }
-    auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+    tm.tm_isdst = 0;  // Ensure no DST adjustment
+    auto tp = std::chrono::system_clock::from_time_t(timegm(&tm));
     auto now = std::chrono::system_clock::now();
     if (tp <= now) {
         std::cerr << "Error: Schedule time must be in the future." << std::endl;
@@ -353,11 +354,18 @@ FileChanges gather_file_changes(const std::vector<std::string>& specified_files)
         }
     } else {
         // Auto-detect
-        std::string modified_output = exec_command("git status --porcelain | grep -E '^\\?\\? |^\\.M |^M\\. ' | awk '{print $2}'");
-        std::istringstream mod_iss(modified_output);
-        std::string mod_file;
-        while (std::getline(mod_iss, mod_file)) {
-            changes.files_to_zip.push_back(mod_file);
+        std::istringstream iss(git_status);
+        std::string line;
+        while (std::getline(iss, line)) {
+            if (line.size() < 3) continue;
+            char x = line[0], y = line[1];
+            std::string path = line.substr(3);
+            // Trim whitespace from path
+            path.erase(path.begin(), std::find_if(path.begin(), path.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+            path.erase(std::find_if(path.rbegin(), path.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), path.end());
+            if ((x == 'A' && y == ' ') || (x == 'M' && y == ' ') || (x == ' ' && y == 'M') || (x == 'M' && y == 'M') || (x == '?' && y == '?')) {
+                changes.files_to_zip.push_back(path);
+            }
         }
         for (const auto& r : renames) {
             if (fs::exists(r.second) && !in_vector(r.second, changes.files_to_zip)) {
@@ -442,7 +450,8 @@ std::string base64_encode_file(const std::string& filename) {
 
     BUF_MEM* buffer_ptr;
     BIO_get_mem_ptr(bio, &buffer_ptr);
-    std::string encoded(buffer_ptr->data, buffer_ptr->length - 1); // Remove trailing newline
+    std::string encoded(buffer_ptr->data, buffer_ptr->length);
+    encoded.erase(std::remove(encoded.begin(), encoded.end(), '\n'), encoded.end());
     BIO_free_all(bio);
     return encoded;
 }
