@@ -5,3 +5,5 @@ __pycache__
 .gits-manifest-*.json
 
 build
+
+.vscode/

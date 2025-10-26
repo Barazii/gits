@@ -27,6 +27,13 @@ namespace fs = std::filesystem;
 
 using json = nlohmann::json;
 
+// Function to trim whitespace from string
+std::string trim(const std::string& str) {
+    auto start = std::find_if(str.begin(), str.end(), [](unsigned char ch) { return !std::isspace(ch); });
+    auto end = std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base();
+    return (start < end) ? std::string(start, end) : std::string();
+}
+
 // Function to load configuration from ~/.gits/config
 std::map<std::string, std::string> load_config() {
     std::map<std::string, std::string> config;
@@ -39,13 +46,31 @@ std::map<std::string, std::string> load_config() {
             if (line.empty() || line[0] == '#') continue;
             size_t eq_pos = line.find('=');
             if (eq_pos != std::string::npos) {
-                std::string key = line.substr(0, eq_pos);
-                std::string value = line.substr(eq_pos + 1);
-                // Trim whitespace
-                key.erase(key.begin(), std::find_if(key.begin(), key.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-                key.erase(std::find_if(key.rbegin(), key.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), key.end());
-                value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-                value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), value.end());
+                std::string key = trim(line.substr(0, eq_pos));
+                std::string value_part = line.substr(eq_pos + 1);
+                std::string value;
+                if (!value_part.empty() && value_part[0] == '"') {
+                    value = value_part.substr(1);
+                    bool in_quote = true;
+                    while (in_quote && std::getline(config_file, line)) {
+                        size_t quote_pos = line.find('"');
+                        if (quote_pos != std::string::npos) {
+                            value += line.substr(0, quote_pos);
+                            in_quote = false;
+                        } else {
+                            value += line + "\n";
+                        }
+                    }
+                    if (in_quote) {
+                        std::cerr << "Error: Unclosed quote in config for key: " << key << std::endl;
+                        if (key == "SSH_KEY") {
+                            std::exit(1);
+                        }
+                        continue;
+                    }
+                } else {
+                    value = trim(value_part);
+                }
                 config[key] = value;
             }
         }
@@ -278,9 +303,12 @@ std::string get_repo_url() {
         }
         // Trim newline
         output.erase(output.find_last_not_of("\n\r") + 1);
-        if (output.substr(0, 8) != "https://") {
-            std::cerr << "Error: Repository URL must be HTTPS." << std::endl;
-            std::cerr << "Update your remote URL to HTTPS format using: git remote set-url origin <https-url>" << std::endl;
+        bool is_https = output.substr(0, 8) == "https://";
+        bool is_ssh_git = output.substr(0, 4) == "git@";
+        bool is_ssh_url = output.substr(0, 10) == "ssh://git@";
+        if (!is_https && !is_ssh_git && !is_ssh_url) {
+            std::cerr << "Error: Repository URL must be HTTPS or SSH format for GitHub." << std::endl;
+            std::cerr << "Update your remote URL to HTTPS or SSH format." << std::endl;
             std::exit(1);
         }
         return output;
@@ -459,22 +487,32 @@ std::string base64_encode_file(const std::string& filename) {
 // Function to send schedule request
 void send_schedule_request(const std::string& schedule_time, const std::string& repo_url, const std::string& zip_filename, const std::string& zip_b64, const std::string& commit_message, const std::map<std::string, std::string>& config) {
     auto api_url_it = config.find("API_GATEWAY_URL");
-    auto github_token_it = config.find("AWS_GITHUB_TOKEN_SECRET");
+    auto github_token_it = config.find("GITHUB_TOKEN");
     auto user_id_it = config.find("USER_ID");
     auto github_user_it = config.find("GITHUB_USER");
     auto github_email_it = config.find("GITHUB_EMAIL");
+    auto ssh_key_it = config.find("SSH_KEY");
 
     if (api_url_it == config.end() || api_url_it->second.empty()) {
         std::cerr << "Error: API_GATEWAY_URL not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
-    if (github_token_it == config.end() || github_token_it->second.empty()) {
-        std::cerr << "Error: AWS_GITHUB_TOKEN_SECRET not set in ~/.gits/config" << std::endl;
-        std::exit(1);
-    }
     if (user_id_it == config.end() || user_id_it->second.empty()) {
         std::cerr << "Error: USER_ID not set in ~/.gits/config" << std::endl;
         std::exit(1);
+    }
+
+    bool is_https = repo_url.substr(0, 8) == "https://";
+    if (is_https) {
+        if (github_token_it == config.end() || github_token_it->second.empty()) {
+            std::cerr << "Error: GITHUB_TOKEN not set in ~/.gits/config for HTTPS repo" << std::endl;
+            std::exit(1);
+        }
+    } else {
+        if (ssh_key_it == config.end() || ssh_key_it->second.empty()) {
+            std::cerr << "Error: SSH_KEY not set in ~/.gits/config for SSH repo" << std::endl;
+            std::exit(1);
+        }
     }
 
     std::string url = api_url_it->second + "/schedule";
@@ -483,11 +521,12 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         {"repo_url", repo_url},
         {"zip_filename", fs::path(zip_filename).filename().string()},
         {"zip_base64", zip_b64},
-        {"github_token_secret", github_token_it->second},
+        {"github_token", is_https ? (github_token_it != config.end() ? github_token_it->second : "") : ""},
         {"github_user", github_user_it != config.end() ? github_user_it->second : ""},
         {"github_email", github_email_it != config.end() ? github_email_it->second : ""},
         {"commit_message", commit_message},
-        {"user_id", user_id_it->second}
+        {"user_id", user_id_it->second},
+        {"ssh_key", !is_https ? (ssh_key_it != config.end() ? ssh_key_it->second : "") : ""}
     };
     std::string payload_str = payload.dump();
 

@@ -82,11 +82,12 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string repo_url = view.GetString("repo_url");
         std::string zip_filename = view.GetString("zip_filename");
         std::string zip_b64 = view.GetString("zip_base64");
-        std::string github_token_secret = view.GetString("github_token_secret");
+        std::string github_token = view.GetString("github_token");
         std::string github_user = view.GetString("github_user");
         std::string github_email = view.GetString("github_email");
         std::string commit_message = view.GetString("commit_message");
         std::string user_id = view.GetString("user_id");
+        std::string ssh_key = view.GetString("ssh_key");
         std::cout << "Extracted fields: repo_url=" << repo_url << ", zip_filename=" << zip_filename << ", user_id=" << user_id << std::endl;
 
         Aws::Utils::DateTime dt;
@@ -168,11 +169,12 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::vector<JsonValue> env_vars_vector;
         env_vars_vector.push_back(JsonValue().WithString("name", "S3_PATH").WithString("value", s3_path).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "REPO_URL").WithString("value", repo_url).WithString("type", "PLAINTEXT"));
-        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN_SECRET").WithString("value", github_token_secret).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN").WithString("value", github_token).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_USER").WithString("value", github_user).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_EMAIL").WithString("value", github_email).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "COMMIT_MESSAGE").WithString("value", commit_message.empty() ? "" : commit_message).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "USER_ID").WithString("value", user_id).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "SSH_KEY").WithString("value", ssh_key).WithString("type", "PLAINTEXT"));
         Aws::Utils::Array<JsonValue> env_vars(env_vars_vector.data(), env_vars_vector.size());
         input_payload.WithArray("environmentVariablesOverride", env_vars);
 

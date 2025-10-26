@@ -4,12 +4,18 @@ phases:
   install:
     commands:
       - apt-get update
-      - apt-get install -y git unzip jq
+      - apt-get install -y git unzip jq openssh-client
   pre_build:
     commands:
-      # Retrieving GitHub token from AWS Secrets Manager
-      - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id $GITHUB_TOKEN_SECRET --query SecretString --output text | jq -r '.Token')
-      - git config --global credential.helper '!f() { echo "username=Barazii"; echo "password=$GITHUB_TOKEN"; }; f'
+      - |
+        if [[ $REPO_URL == https://* ]]; then
+          git config --global credential.helper '!f() { echo "username=Barazii"; echo "password=$GITHUB_TOKEN"; }; f'
+        else
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+        fi
       - git config --global user.email $GITHUB_EMAIL
       - git config --global user.name $GITHUB_USER
   build:
