@@ -1,7 +1,5 @@
-# Use Amazon Linux 2023 as base
-FROM amazonlinux:2023 AS builder
-
-# FROM public.ecr.aws/lambda/provided:al2023 AS builder
+# Use AWS Lambda provided runtime as base
+FROM public.ecr.aws/lambda/provided:al2023 AS builder
 
 # Install build tools
 RUN dnf install -y cmake gcc-c++ git libcurl-devel openssl-devel zlib-devel
@@ -34,9 +32,7 @@ RUN mkdir build && cd build && \
     cmake --build . --config Release
 
 # Final image
-FROM amazonlinux:2023
-RUN mkdir -p /var/runtime
+FROM public.ecr.aws/lambda/provided:al2023
 COPY --from=builder /app/build/bootstrap /var/runtime/bootstrap
-RUN chmod +x /var/runtime/bootstrap
 
-CMD ["/var/runtime/bootstrap"]
+CMD ["bootstrap"]

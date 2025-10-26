@@ -18,8 +18,6 @@ make --status --log. make --delete --deschedule.
 
 make all lambda's docker use the same image.
 
-remove py code and associated cloud resources.
-
 fix the names mess. 
 
 make --status equivalnet to -s and --delete to -d
