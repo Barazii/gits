@@ -19,6 +19,7 @@ using namespace Aws::Utils::Logging;
 
 static invocation_response my_handler(invocation_request const& request)
 {
+    std::cout << "Lambda handler started" << std::endl;
     std::cout << "Received event: " << request.payload << std::endl;
     JsonValue event(request.payload);
     if (!event.WasParseSuccessful()) {
@@ -28,6 +29,7 @@ static invocation_response my_handler(invocation_request const& request)
         fullResponse.WithString("body", JsonValue().WithString("error", "Invalid JSON").View().WriteReadable());
         return invocation_response::success(fullResponse.View().WriteReadable(), "application/json");
     }
+    std::cout << "Event JSON parsed successfully" << std::endl;
 
     JsonView eventView = event.View();
     auto queryParams = eventView.GetObject("queryStringParameters");
@@ -38,6 +40,7 @@ static invocation_response my_handler(invocation_request const& request)
         fullResponse.WithString("body", JsonValue().WithString("error", "Missing queryStringParameters").View().WriteReadable());
         return invocation_response::success(fullResponse.View().WriteReadable(), "application/json");
     }
+    std::cout << "queryStringParameters found" << std::endl;
 
     std::string user_id = queryParams.GetString("user_id");
     if (user_id.empty()) {
@@ -47,6 +50,7 @@ static invocation_response my_handler(invocation_request const& request)
         fullResponse.WithString("body", JsonValue().WithString("error", "user_id is required").View().WriteReadable());
         return invocation_response::success(fullResponse.View().WriteReadable(), "application/json");
     }
+    std::cout << "Extracted user_id: " << user_id << std::endl;
 
     const char* region_env = std::getenv("AWS_APP_REGION");
     std::string region = region_env ? region_env : "eu-north-1";
@@ -67,6 +71,7 @@ static invocation_response my_handler(invocation_request const& request)
     Aws::Client::ClientConfiguration clientConfig;
     clientConfig.region = region;
     DynamoDBClient dynamoClient(clientConfig);
+    std::cout << "DynamoDB client initialized" << std::endl;
 
     QueryRequest queryRequest;
     queryRequest.SetTableName(table_name);
@@ -87,6 +92,7 @@ static invocation_response my_handler(invocation_request const& request)
         fullResponse.WithString("body", JsonValue().WithString("error", "Internal server error").View().WriteReadable());
         return invocation_response::success(fullResponse.View().WriteReadable(), "application/json");
     }
+    std::cout << "DynamoDB query successful" << std::endl;
 
     auto& items = queryOutcome.GetResult().GetItems();
     if (items.empty()) {
@@ -96,6 +102,7 @@ static invocation_response my_handler(invocation_request const& request)
         fullResponse.WithString("body", JsonValue().WithString("error", "No scheduled jobs found for this user").View().WriteReadable());
         return invocation_response::success(fullResponse.View().WriteReadable(), "application/json");
     }
+    std::cout << "Found " << items.size() << " item(s) for user_id: " << user_id << std::endl;
 
     auto& item = items[0];
     JsonValue body;
@@ -108,11 +115,13 @@ static invocation_response my_handler(invocation_request const& request)
     if (item.count("status")) {
         body.WithString("status", item.at("status").GetS());
     }
+    std::cout << "Response body prepared" << std::endl;
 
     std::cout << "Returning success for user_id: " << user_id << std::endl;
     JsonValue fullResponse;
     fullResponse.WithInteger("statusCode", 200);
     fullResponse.WithString("body", body.View().WriteReadable());
+    std::cout << "Lambda handler completed successfully" << std::endl;
     return invocation_response::success(fullResponse.View().WriteReadable(), "application/json");
 }
 

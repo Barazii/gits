@@ -8,17 +8,17 @@ update readme file.
 
 add support to ssh repo (not only http)
 
-stress test
+stress test         <-
 
 make the github api token in the config file, not aws secret manager. 
 
 deployment to users on their machines. installation on their machines.
 
-make check for git repo and config variables defined at begining of program run
+make check for git repo and config variables defined at begining of program run     <-
 
 create bash script to automate running user testcases. so: first compile. then run the execuable in different testcases. get output compare it with expected results.
 
-gits.cpp: duplicate check of current git repo
+gits.cpp: duplicate check of current git repo       <-
 
 make the cpp docker components do logging properly.
 
@@ -31,3 +31,7 @@ add logging for all lambdas (status and schedule left)
 make all lambda's docker use the same image.
 
 update the deployment folder scripts.
+
+remove py code and associated cloud resources.
+
+fix the names mess. 

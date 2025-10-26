@@ -6,10 +6,10 @@
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BACKEND_SCRIPT="$SCRIPT_DIR/deploy_backend.sh"
-LAMBDA_SCRIPT="$SCRIPT_DIR/deploy_gitsops_lambda.sh"
-CODEBUILDLENSE_SCRIPT="$SCRIPT_DIR/deploy_codebuildlense_lambda.sh"
-GETSTATUS_SCRIPT="$SCRIPT_DIR/deploy_getstatus_lambda.sh"
-DELETE_SCRIPT="$SCRIPT_DIR/deploy_delete_lambda.sh"
+LAMBDA_SCRIPT="$SCRIPT_DIR/../gitsops_lambda/cpp/deploy.sh"
+CODEBUILDLENSE_SCRIPT="$SCRIPT_DIR/../codebuildlense_lambda/cpp/deploy.sh"
+GETSTATUS_SCRIPT="$SCRIPT_DIR/../getstatus_lambda/cpp/deploy.sh"
+DELETE_SCRIPT="$SCRIPT_DIR/../delete_lambda/cpp/deploy.sh"
 
 RUN_BACKEND=true
 RUN_LAMBDA=true
@@ -82,27 +82,27 @@ chmod +x "$BACKEND_SCRIPT" "$LAMBDA_SCRIPT" "$CODEBUILDLENSE_SCRIPT" "$GETSTATUS
 
 if $RUN_BACKEND; then
 	echo "==> Deploying backend"
-	"$BACKEND_SCRIPT"
+	"$BACKEND_SCRIPT" || { echo "Backend deployment failed" >&2; exit 1; }
 fi
 
 if $RUN_LAMBDA; then
 	echo "==> Deploying GitsOps Lambda"
-	"$LAMBDA_SCRIPT" "${LAMBDA_ARGS[@]}"
+	"$LAMBDA_SCRIPT" "${LAMBDA_ARGS[@]}" || { echo "GitsOps Lambda deployment failed" >&2; exit 1; }
 fi
 
 if $RUN_CODEBUILDLENSE; then
 	echo "==> Deploying CodeBuild Lense Lambda"
-	"$CODEBUILDLENSE_SCRIPT" "${LAMBDA_ARGS[@]}"
+	"$CODEBUILDLENSE_SCRIPT" "${LAMBDA_ARGS[@]}" || { echo "CodeBuild Lense Lambda deployment failed" >&2; exit 1; }
 fi
 
 if $RUN_GETSTATUS; then
 	echo "==> Deploying GetStatus Lambda"
-	"$GETSTATUS_SCRIPT" "${LAMBDA_ARGS[@]}"
+	"$GETSTATUS_SCRIPT" "${LAMBDA_ARGS[@]}" || { echo "GetStatus Lambda deployment failed" >&2; exit 1; }
 fi
 
 if $RUN_DELETE; then
 	echo "==> Deploying Delete Lambda"
-	"$DELETE_SCRIPT" "${LAMBDA_ARGS[@]}"
+	"$DELETE_SCRIPT" "${LAMBDA_ARGS[@]}" || { echo "Delete Lambda deployment failed" >&2; exit 1; }
 fi
 
 echo "All deployments completed."

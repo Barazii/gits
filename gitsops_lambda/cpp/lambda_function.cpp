@@ -52,10 +52,13 @@ JsonValue create_response(int status, const JsonValue& body) {
 
 invocation_response lambda_handler(invocation_request const& request, S3Client& s3_client, EventBridgeClient& events_client, DynamoDBClient& dynamodb_client) {
     try {
+        std::cout << "Lambda handler started" << std::endl;
         JsonValue event_json(request.payload);
         if (!event_json.WasParseSuccessful()) {
+            std::cerr << "Error: Failed to parse event JSON" << std::endl;
             return invocation_response::failure("Failed to parse event JSON", "ParseError");
         }
+        std::cout << "Event JSON parsed successfully" << std::endl;
 
         std::string body_raw = event_json.View().GetString("body");
         bool is_base64 = event_json.View().GetBool("isBase64Encoded");
@@ -65,11 +68,14 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
             Aws::Utils::CryptoBuffer decoded = base64.Decode(body_raw);
             body_raw = std::string(reinterpret_cast<char*>(decoded.GetUnderlyingData()), decoded.GetLength());
         }
+        std::cout << "Body decoded, is_base64: " << (is_base64 ? "true" : "false") << std::endl;
 
         JsonValue data(body_raw);
         if (!data.WasParseSuccessful()) {
+            std::cerr << "Error: Failed to parse body JSON" << std::endl;
             return invocation_response::failure("Failed to parse body JSON", "ParseError");
         }
+        std::cout << "Body JSON parsed successfully" << std::endl;
 
         auto view = data.View();
         std::string schedule_time = view.GetString("schedule_time");
@@ -81,15 +87,18 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string github_email = view.GetString("github_email");
         std::string commit_message = view.GetString("commit_message");
         std::string user_id = view.GetString("user_id");
+        std::cout << "Extracted fields: repo_url=" << repo_url << ", zip_filename=" << zip_filename << ", user_id=" << user_id << std::endl;
 
         Aws::Utils::DateTime dt;
         try {
             dt = parse_iso8601(schedule_time);
         } catch (const std::exception& e) {
+            std::cerr << "Error: Invalid schedule_time: " << e.what() << std::endl;
             JsonValue error_body;
             error_body.WithString("error", std::string("Invalid schedule_time: ") + e.what());
             return invocation_response::success(create_response(400, error_body).View().WriteCompact(), "application/json");
         }
+        std::cout << "Schedule time parsed: " << schedule_time << std::endl;
 
         std::string region = getenv("AWS_APP_REGION") ? getenv("AWS_APP_REGION") : "";
         std::string bucket = getenv("AWS_BUCKET_NAME") ? getenv("AWS_BUCKET_NAME") : "";
@@ -103,10 +112,12 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         try {
             zip_bytes = base64.Decode(zip_b64);
         } catch (const std::exception&) {
+            std::cerr << "Error: zip_base64 is not valid base64" << std::endl;
             JsonValue error_body;
             error_body.WithString("error", "zip_base64 is not valid base64");
             return invocation_response::success(create_response(400, error_body).View().WriteCompact(), "application/json");
         }
+        std::cout << "Zip decoded, size: " << zip_bytes.GetLength() << " bytes" << std::endl;
 
         // S3 key
         auto now = std::chrono::system_clock::now();
@@ -115,6 +126,7 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string key = prefix + "/" + zip_filename;
 
         // Upload to S3
+        std::cout << "Uploading to S3: bucket=" << bucket << ", key=" << key << std::endl;
         PutObjectRequest put_request;
         put_request.SetBucket(bucket);
         put_request.SetKey(key);
@@ -123,40 +135,44 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         put_request.SetBody(input_data);
         auto put_outcome = s3_client.PutObject(put_request);
         if (!put_outcome.IsSuccess()) {
+            std::cerr << "Error: Failed to upload to S3: " << put_outcome.GetError().GetMessage() << std::endl;
             JsonValue error_body;
             error_body.WithString("error", "Failed to upload to S3: " + put_outcome.GetError().GetMessage());
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
 
         std::string s3_path = "s3://" + bucket + "/" + key;
+        std::cout << "S3 upload successful: " << s3_path << std::endl;
 
         std::string cron_expr = cron_expression(dt);
         std::string rule_name = "gits-" + std::to_string(now_tt);
 
         // Put rule
+        std::cout << "Creating EventBridge rule: " << rule_name << ", cron: " << cron_expr << std::endl;
         PutRuleRequest rule_request;
         rule_request.SetName(rule_name);
         rule_request.SetScheduleExpression(cron_expr);
         rule_request.SetState(RuleState::ENABLED);
         auto rule_outcome = events_client.PutRule(rule_request);
         if (!rule_outcome.IsSuccess()) {
+            std::cerr << "Error: Failed to create EventBridge rule: " << rule_outcome.GetError().GetMessage() << std::endl;
             JsonValue error_body;
             error_body.WithString("error", "Failed to create EventBridge rule: " + rule_outcome.GetError().GetMessage());
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
+        std::cout << "EventBridge rule created successfully" << std::endl;
 
         std::string cb_project_arn = "arn:aws:codebuild:" + region + ":" + account_id + ":project/" + project;
 
         JsonValue input_payload;
-        std::vector<JsonValue> env_vars_vector = {
-            JsonValue().WithString("name", "S3_PATH").WithString("value", s3_path).WithString("type", "PLAINTEXT"),
-            JsonValue().WithString("name", "REPO_URL").WithString("value", repo_url).WithString("type", "PLAINTEXT"),
-            JsonValue().WithString("name", "GITHUB_TOKEN_SECRET").WithString("value", github_token_secret).WithString("type", "PLAINTEXT"),
-            JsonValue().WithString("name", "GITHUB_USER").WithString("value", github_user).WithString("type", "PLAINTEXT"),
-            JsonValue().WithString("name", "GITHUB_EMAIL").WithString("value", github_email).WithString("type", "PLAINTEXT"),
-            JsonValue().WithString("name", "COMMIT_MESSAGE").WithString("value", commit_message.empty() ? "" : commit_message).WithString("type", "PLAINTEXT"),
-            JsonValue().WithString("name", "USER_ID").WithString("value", user_id).WithString("type", "PLAINTEXT")
-        };
+        std::vector<JsonValue> env_vars_vector;
+        env_vars_vector.push_back(JsonValue().WithString("name", "S3_PATH").WithString("value", s3_path).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "REPO_URL").WithString("value", repo_url).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN_SECRET").WithString("value", github_token_secret).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_USER").WithString("value", github_user).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_EMAIL").WithString("value", github_email).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "COMMIT_MESSAGE").WithString("value", commit_message.empty() ? "" : commit_message).WithString("type", "PLAINTEXT"));
+        env_vars_vector.push_back(JsonValue().WithString("name", "USER_ID").WithString("value", user_id).WithString("type", "PLAINTEXT"));
         Aws::Utils::Array<JsonValue> env_vars(env_vars_vector.data(), env_vars_vector.size());
         input_payload.WithArray("environmentVariablesOverride", env_vars);
 
@@ -169,16 +185,20 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         PutTargetsRequest targets_request;
         targets_request.SetRule(rule_name);
         targets_request.SetTargets({target});
+        std::cout << "Setting EventBridge targets for rule: " << rule_name << std::endl;
         auto targets_outcome = events_client.PutTargets(targets_request);
         if (!targets_outcome.IsSuccess()) {
+            std::cerr << "Error: Failed to set targets: " << targets_outcome.GetError().GetMessage() << std::endl;
             JsonValue error_body;
             error_body.WithString("error", "Failed to set targets: " + targets_outcome.GetError().GetMessage());
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
+        std::cout << "EventBridge targets set successfully" << std::endl;
 
         // DynamoDB
         std::string table_name = getenv("DYNAMODB_TABLE") ? getenv("DYNAMODB_TABLE") : "";
         if (!table_name.empty()) {
+            std::cout << "Writing to DynamoDB table: " << table_name << ", job_id: " << rule_name << std::endl;
             PutItemRequest put_item_request;
             put_item_request.SetTableName(table_name);
             AttributeValue user_id_attr;
@@ -202,6 +222,8 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
             if (!db_outcome.IsSuccess()) {
                 // Log error but don't fail
                 std::cerr << "Failed to write to DynamoDB: " << db_outcome.GetError().GetMessage() << std::endl;
+            } else {
+                std::cout << "DynamoDB write successful" << std::endl;
             }
         }
 
@@ -210,9 +232,11 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         success_body.WithString("rule_name", rule_name);
         success_body.WithString("cron_expression", cron_expr);
         success_body.WithString("s3_path", s3_path);
+        std::cout << "Lambda handler completed successfully" << std::endl;
         return invocation_response::success(create_response(200, success_body).View().WriteCompact(), "application/json");
 
     } catch (const std::exception& e) {
+        std::cerr << "Exception caught: " << e.what() << std::endl;
         JsonValue error_body;
         error_body.WithString("error", std::string("Exception: ") + e.what());
         return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");

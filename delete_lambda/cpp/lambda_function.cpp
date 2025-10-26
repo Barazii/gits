@@ -30,8 +30,10 @@ JsonValue create_response(int status, const JsonValue& body) {
 
 invocation_response lambda_handler(invocation_request const& request, EventBridgeClient& events_client, DynamoDBClient& dynamodb_client) {
     try {
+        std::cout << "Received event: " << request.payload << std::endl;
         JsonValue event_json(request.payload);
         if (!event_json.WasParseSuccessful()) {
+            std::cerr << "Failed to parse event JSON" << std::endl;
             return invocation_response::failure("Failed to parse event JSON", "ParseError");
         }
 
@@ -39,6 +41,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
         bool is_base64 = event_json.View().GetBool("isBase64Encoded");
 
         if (is_base64) {
+            std::cout << "Decoding base64 body" << std::endl;
             Aws::Utils::Base64::Base64 base64;
             Aws::Utils::CryptoBuffer decoded = base64.Decode(body_raw);
             body_raw = std::string(reinterpret_cast<char*>(decoded.GetUnderlyingData()), decoded.GetLength());
@@ -46,6 +49,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
 
         JsonValue data(body_raw);
         if (!data.WasParseSuccessful()) {
+            std::cerr << "Failed to parse body JSON" << std::endl;
             return invocation_response::failure("Failed to parse body JSON", "ParseError");
         }
 
@@ -53,7 +57,10 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
         std::string job_id = view.GetString("job_id");
         std::string user_id = view.GetString("user_id");
 
+        std::cout << "Extracted job_id: " << job_id << ", user_id: " << user_id << std::endl;
+
         if (job_id.empty() || user_id.empty()) {
+            std::cerr << "job_id and user_id are required" << std::endl;
             JsonValue error_body;
             error_body.WithString("error", "job_id and user_id are required");
             return invocation_response::success(create_response(400, error_body).View().WriteCompact(), "application/json");
@@ -62,12 +69,14 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
         std::string region = getenv("AWS_APP_REGION") ? getenv("AWS_APP_REGION") : "eu-north-1";
         std::string table_name = getenv("DYNAMODB_TABLE") ? getenv("DYNAMODB_TABLE") : "";
         if (table_name.empty()) {
+            std::cerr << "DYNAMODB_TABLE environment variable not set" << std::endl;
             JsonValue error_body;
             error_body.WithString("error", "DYNAMODB_TABLE environment variable not set");
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
 
         // Delete EventBridge rule
+        std::cout << "Deleting EventBridge rule: " << job_id << std::endl;
         try {
             // First remove targets
             RemoveTargetsRequest remove_targets_request;
@@ -88,6 +97,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
                 if (delete_outcome.GetError().GetErrorType() == EventBridgeErrors::RESOURCE_NOT_FOUND) {
                     std::cerr << "Rule " << job_id << " not found" << std::endl;
                 } else {
+                    std::cerr << "Failed to delete EventBridge rule: " << delete_outcome.GetError().GetMessage() << std::endl;
                     JsonValue error_body;
                     error_body.WithString("error", "Failed to delete EventBridge rule: " + delete_outcome.GetError().GetMessage());
                     return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
@@ -96,12 +106,14 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
                 std::cout << "Deleted EventBridge rule: " << job_id << std::endl;
             }
         } catch (const std::exception& e) {
+            std::cerr << "Error deleting rule: " << e.what() << std::endl;
             JsonValue error_body;
             error_body.WithString("error", std::string("Error deleting rule: ") + e.what());
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
 
         // Delete DynamoDB item
+        std::cout << "Querying DynamoDB for job_id: " << job_id << ", user_id: " << user_id << std::endl;
         try {
             // Query to find the item with matching job_id
             QueryRequest query_request;
@@ -119,6 +131,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
 
             auto query_outcome = dynamodb_client.Query(query_request);
             if (!query_outcome.IsSuccess()) {
+                std::cerr << "Failed to query DynamoDB: " << query_outcome.GetError().GetMessage() << std::endl;
                 JsonValue error_body;
                 error_body.WithString("error", "Failed to query DynamoDB: " + query_outcome.GetError().GetMessage());
                 return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
@@ -126,6 +139,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
 
             auto& items = query_outcome.GetResult().GetItems();
             if (items.empty()) {
+                std::cerr << "Job not found" << std::endl;
                 JsonValue error_body;
                 error_body.WithString("error", "Job not found");
                 return invocation_response::success(create_response(404, error_body).View().WriteCompact(), "application/json");
@@ -135,6 +149,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
             std::string added_at = item.at("added_at").GetN();
 
             // Delete the item
+            std::cout << "Deleting DynamoDB item: user_id=" << user_id << ", added_at=" << added_at << std::endl;
             DeleteItemRequest delete_request;
             delete_request.SetTableName(table_name);
             AttributeValue pk_user_id;
@@ -146,6 +161,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
 
             auto delete_outcome = dynamodb_client.DeleteItem(delete_request);
             if (!delete_outcome.IsSuccess()) {
+                std::cerr << "Failed to delete DynamoDB item: " << delete_outcome.GetError().GetMessage() << std::endl;
                 JsonValue error_body;
                 error_body.WithString("error", "Failed to delete DynamoDB item: " + delete_outcome.GetError().GetMessage());
                 return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
@@ -153,16 +169,19 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
 
             std::cout << "Deleted DynamoDB item: user_id=" << user_id << ", job_id=" << job_id << std::endl;
         } catch (const std::exception& e) {
+            std::cerr << "Error deleting DB item: " << e.what() << std::endl;
             JsonValue error_body;
             error_body.WithString("error", std::string("Error deleting DB item: ") + e.what());
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
 
+        std::cout << "Job deleted successfully" << std::endl;
         JsonValue success_body;
         success_body.WithString("message", "Job deleted successfully");
         return invocation_response::success(create_response(200, success_body).View().WriteCompact(), "application/json");
 
     } catch (const std::exception& e) {
+        std::cerr << "Unexpected error: " << e.what() << std::endl;
         JsonValue error_body;
         error_body.WithString("error", std::string("Unexpected error: ") + e.what());
         return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
