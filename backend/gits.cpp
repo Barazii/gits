@@ -80,66 +80,90 @@ std::map<std::string, std::string> load_config() {
 
 // Struct for parsed arguments
 struct Args {
+    std::string command;
     std::string schedule_time;
     std::string commit_message;
     std::vector<std::string> files;
-    bool status = false;
     std::string delete_job_id;
 };
 
 // Function to parse command line arguments
 Args parse_args(int argc, char* argv[]) {
     Args args;
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "-m" || arg == "--message") {
-            if (i + 1 >= argc || (argv[i+1][0] == '-' && !std::isdigit(argv[i+1][1]))) {
-                std::cerr << "Error: -m|--message requires a commit message" << std::endl;
-                std::exit(2);
-            }
-            args.commit_message = argv[++i];
-        } else if (arg == "-f" || arg == "--file") {
-            if (i + 1 >= argc) {
-                std::cerr << "Error: -f|--file requires a file path" << std::endl;
-                std::exit(2);
-            }
-            std::string files_str = argv[++i];
-            // Support comma-separated
-            std::stringstream ss(files_str);
-            std::string file;
-            while (std::getline(ss, file, ',')) {
-                if (!file.empty()) {
-                    args.files.push_back(file);
+    if (argc < 2) {
+        std::cerr << "Usage: gits <command> [options]" << std::endl;
+        std::cerr << "Commands:" << std::endl;
+        std::cerr << "  schedule <time> [--message <msg>] [--file <path>]..." << std::endl;
+        std::cerr << "  status" << std::endl;
+        std::cerr << "  delete --job_id <id>" << std::endl;
+        std::exit(2);
+    }
+    std::string command = argv[1];
+    args.command = command;
+    if (command == "schedule") {
+        if (argc < 3) {
+            std::cerr << "Error: schedule requires a schedule time" << std::endl;
+            std::exit(2);
+        }
+        args.schedule_time = argv[2];
+        for (int i = 3; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--message") {
+                if (i + 1 >= argc) {
+                    std::cerr << "Error: --message requires a commit message" << std::endl;
+                    std::exit(2);
                 }
-            }
-        } else if (arg == "-h" || arg == "--help") {
-            std::cout << "Usage: gits <schedule-time> [-m|--message \"commit message\"] [-f|--file <path>]..." << std::endl;
-            std::cout << "       gits --status" << std::endl;
-            std::cout << "       gits --delete <job_id>" << std::endl;
-            std::cout << "Examples:" << std::endl;
-            std::cout << "  gits '2025-07-17T15:00:00Z' -m 'Fix: docs'" << std::endl;
-            std::cout << "  gits '2025-07-17T15:00:00Z' -f app.py -f README.md" << std::endl;
-            std::cout << "  gits '2025-07-17T15:00:00Z' -f app.py,README.md" << std::endl;
-            std::cout << "  gits --status" << std::endl;
-            std::cout << "  gits --delete job-123" << std::endl;
-            std::exit(0);
-        } else if (arg == "--status") {
-            args.status = true;
-        } else if (arg == "--delete") {
-            if (i + 1 >= argc) {
-                std::cerr << "Error: --delete requires a job_id" << std::endl;
-                std::exit(2);
-            }
-            args.delete_job_id = argv[++i];
-        } else {
-            if (args.schedule_time.empty()) {
-                args.schedule_time = arg;
+                args.commit_message = argv[++i];
+            } else if (arg == "--file") {
+                if (i + 1 >= argc) {
+                    std::cerr << "Error: --file requires a file path" << std::endl;
+                    std::exit(2);
+                }
+                std::string files_str = argv[++i];
+                std::stringstream ss(files_str);
+                std::string file;
+                while (std::getline(ss, file, ',')) {
+                    if (!file.empty()) {
+                        args.files.push_back(file);
+                    }
+                }
             } else {
-                std::cerr << "Error: unexpected argument: " << arg << std::endl;
-                std::cerr << "Usage: gits <schedule-time> [-m|--message \"commit message\"] [-f|--file <path>]..." << std::endl;
+                std::cerr << "Error: unknown option for schedule: " << arg << std::endl;
                 std::exit(2);
             }
         }
+    } else if (command == "status") {
+        if (argc > 2) {
+            std::cerr << "Error: status takes no arguments" << std::endl;
+            std::exit(2);
+        }
+    } else if (command == "delete") {
+        if (argc < 4 || std::string(argv[2]) != "--job_id") {
+            std::cerr << "Error: delete requires --job_id <id>" << std::endl;
+            std::exit(2);
+        }
+        args.delete_job_id = argv[3];
+        if (argc > 4) {
+            std::cerr << "Error: delete takes only --job_id <id>" << std::endl;
+            std::exit(2);
+        }
+    } else if (command == "-h" || command == "--help") {
+        std::cout << "Usage: gits <command> [options]" << std::endl;
+        std::cout << "Commands:" << std::endl;
+        std::cout << "  schedule <time> [--message <msg>] [--file <path>]..." << std::endl;
+        std::cout << "  status" << std::endl;
+        std::cout << "  delete --job_id <id>" << std::endl;
+        std::cout << "Examples:" << std::endl;
+        std::cout << "  gits schedule '2025-07-17T15:00:00Z' --message 'Fix: docs'" << std::endl;
+        std::cout << "  gits schedule '2025-07-17T15:00:00Z' --file app.py --file README.md" << std::endl;
+        std::cout << "  gits schedule '2025-07-17T15:00:00Z' --file app.py,README.md" << std::endl;
+        std::cout << "  gits status" << std::endl;
+        std::cout << "  gits delete --job_id job-123" << std::endl;
+        std::exit(0);
+    } else {
+        std::cerr << "Error: unknown command: " << command << std::endl;
+        std::cerr << "Usage: gits <command> [options]" << std::endl;
+        std::exit(2);
     }
     return args;
 }
@@ -561,24 +585,14 @@ int main(int argc, char* argv[]) {
     auto config = load_config();
     auto args = parse_args(argc, argv);
 
-    if (args.status) {
+    if (args.command == "status") {
         handle_status(config);
         return 0;
     }
 
-    if (!args.delete_job_id.empty()) {
+    if (args.command == "delete") {
         handle_delete(args.delete_job_id, config);
         return 0;
-    }
-
-    if (args.schedule_time.empty()) {
-        std::cerr << "Error: Schedule time required." << std::endl;
-        std::cerr << "Usage: gits <schedule-time> [-m|--message \"commit message\"] [-f|--file <path>]..." << std::endl;
-        std::cerr << "Example:" << std::endl;
-        std::cerr << "  gits '2025-07-17T15:00:00Z' -m 'Fix: docs'" << std::endl;
-        std::cerr << "  gits '2025-07-17T15:00:00Z' -f app.py -f README.md" << std::endl;
-        std::cerr << "  gits '2025-07-17T15:00:00Z' -f app.py,README.md" << std::endl;
-        return 1;
     }
 
     if (!validate_schedule_time(args.schedule_time)) {
