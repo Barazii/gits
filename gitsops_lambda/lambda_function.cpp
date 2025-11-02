@@ -11,6 +11,7 @@
 #include <aws/eventbridge/model/PutTargetsRequest.h>
 #include <aws/secretsmanager/SecretsManagerClient.h>
 #include <aws/secretsmanager/model/CreateSecretRequest.h>
+#include <aws/secretsmanager/model/DescribeSecretRequest.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/AttributeValue.h>
@@ -154,21 +155,27 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
 
         // Create secrets for SSH key and GitHub token
         std::string token_secret_name;
-        std::cout << "######################### " << github_token << std::endl;
         if (!github_token.empty()) {
-            token_secret_name = "gits-token-" + rule_name;
-            CreateSecretRequest token_secret_request;
-            token_secret_request.SetName(token_secret_name);
-            token_secret_request.SetSecretString(github_token);
-            token_secret_request.SetDescription("GitHub token for gits job " + rule_name);
-            auto token_outcome = secrets_client.CreateSecret(token_secret_request);
-            if (!token_outcome.IsSuccess()) {
-                std::cerr << "Error: Failed to create token secret: " << token_outcome.GetError().GetMessage() << std::endl;
-                JsonValue error_body;
-                error_body.WithString("error", "Failed to create token secret: " + token_outcome.GetError().GetMessage());
-                return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
+            token_secret_name = "github-pat-" + github_email;
+            DescribeSecretRequest describe_request;
+            describe_request.SetSecretId(token_secret_name);
+            auto describe_outcome = secrets_client.DescribeSecret(describe_request);
+            if (!describe_outcome.IsSuccess()) {
+                CreateSecretRequest token_secret_request;
+                token_secret_request.SetName(token_secret_name);
+                token_secret_request.SetSecretString(github_token);
+                token_secret_request.SetDescription("GitHub token for gits job");
+                auto token_outcome = secrets_client.CreateSecret(token_secret_request);
+                if (!token_outcome.IsSuccess()) {
+                    std::cerr << "Error: Failed to create token secret: " << token_outcome.GetError().GetMessage() << std::endl;
+                    JsonValue error_body;
+                    error_body.WithString("error", "Failed to create token secret: " + token_outcome.GetError().GetMessage());
+                    return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
+                }
+                std::cout << "Token secret created: " << token_secret_name << std::endl;
+            } else {
+                std::cout << "Token secret already exists: " << token_secret_name << std::endl;
             }
-            std::cout << "Token secret created: " << token_secret_name << std::endl;
         }
 
         // Put rule
@@ -192,11 +199,7 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::vector<JsonValue> env_vars_vector;
         env_vars_vector.push_back(JsonValue().WithString("name", "S3_PATH").WithString("value", s3_path).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "REPO_URL").WithString("value", repo_url).WithString("type", "PLAINTEXT"));
-        if (!token_secret_name.empty()) {
-            env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN_SECRET").WithString("value", token_secret_name).WithString("type", "PLAINTEXT"));
-        } else {
-            env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN").WithString("value", github_token).WithString("type", "PLAINTEXT"));
-        }
+        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN_SECRET").WithString("value", token_secret_name).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_USERNAME").WithString("value", github_username).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_DISPLAY_NAME").WithString("value", github_display_name).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_EMAIL").WithString("value", github_email).WithString("type", "PLAINTEXT"));
