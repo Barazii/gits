@@ -4,19 +4,43 @@ phases:
   install:
     commands:
       - apt-get update
-      - apt-get install -y git unzip jq openssh-client
+      - apt-get install -y git unzip jq openssh-client curl
   pre_build:
     commands:
       - |
         case "$REPO_URL" in
           https://*)
+            if [ -n "$GITHUB_TOKEN_SECRET" ]; then
+              GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "$GITHUB_TOKEN_SECRET" --query SecretString --output text)
+            fi
             git config --global credential.helper '!f() { echo "username=$GITHUB_USERNAME"; echo "password=$GITHUB_TOKEN"; }; f'
             ;;
           *)
+            if [ -n "$GITHUB_TOKEN_SECRET" ]; then
+              GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "$GITHUB_TOKEN_SECRET" --query SecretString --output text)
+            fi
             mkdir -p ~/.ssh
-            echo "$SSH_KEY" > ~/.ssh/id_rsa
+            # Generate SSH key pair
+            ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
             chmod 600 ~/.ssh/id_rsa
+            # Start SSH agent and add key
+            eval "$(ssh-agent -s)"
+            ssh-add ~/.ssh/id_rsa
+            # Extract owner/repo from REPO_URL (assuming git@github.com:owner/repo.git)
+            REPO_PATH=$(echo $REPO_URL | sed 's/git@github.com://' | sed 's/.git$//')
+            OWNER=$(echo $REPO_PATH | cut -d'/' -f1)
+            REPO=$(echo $REPO_PATH | cut -d'/' -f2)
+            # Add deploy key via GitHub API
+            PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)
+            curl -f -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/$OWNER/$REPO/keys \
+              -d "{\"title\":\"CodeBuild Deploy Key\",\"key\":\"$PUBLIC_KEY\",\"read_only\":false}"
             ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+            echo "################# This is token: $GITHUB_TOKEN"
+            echo "$$$$$$$$$$$$$$$$ This is public key: $PUBLIC_KEY"
             ;;
         esac
       - git config --global user.email $GITHUB_EMAIL

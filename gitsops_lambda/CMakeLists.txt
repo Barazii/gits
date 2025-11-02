@@ -3,7 +3,7 @@ project(MyCppLambda LANGUAGES CXX)
 
 find_package(ZLIB REQUIRED)
 find_package(aws-lambda-runtime REQUIRED)
-find_package(AWSSDK REQUIRED COMPONENTS s3 eventbridge dynamodb)
+find_package(AWSSDK REQUIRED COMPONENTS s3 eventbridge dynamodb secretsmanager)
 include_directories(/usr/local/include)
 include_directories(${AWSSDK_INCLUDE_DIRS})
 add_executable(bootstrap lambda_function.cpp)

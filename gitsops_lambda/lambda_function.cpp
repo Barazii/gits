@@ -9,6 +9,8 @@
 #include <aws/eventbridge/EventBridgeClient.h>
 #include <aws/eventbridge/model/PutRuleRequest.h>
 #include <aws/eventbridge/model/PutTargetsRequest.h>
+#include <aws/secretsmanager/SecretsManagerClient.h>
+#include <aws/secretsmanager/model/CreateSecretRequest.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/AttributeValue.h>
@@ -25,6 +27,8 @@ using namespace Aws::S3;
 using namespace Aws::S3::Model;
 using namespace Aws::EventBridge;
 using namespace Aws::EventBridge::Model;
+using namespace Aws::SecretsManager;
+using namespace Aws::SecretsManager::Model;
 using namespace Aws::DynamoDB;
 using namespace Aws::DynamoDB::Model;
 
@@ -50,7 +54,7 @@ JsonValue create_response(int status, const JsonValue& body) {
     return response;
 }
 
-invocation_response lambda_handler(invocation_request const& request, S3Client& s3_client, EventBridgeClient& events_client, DynamoDBClient& dynamodb_client) {
+invocation_response lambda_handler(invocation_request const& request, S3Client& s3_client, EventBridgeClient& events_client, DynamoDBClient& dynamodb_client, SecretsManagerClient& secrets_client) {
     try {
         std::cout << "Lambda handler started" << std::endl;
         JsonValue event_json(request.payload);
@@ -88,7 +92,6 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string github_email = view.GetString("github_email");
         std::string commit_message = view.GetString("commit_message");
         std::string user_id = view.GetString("user_id");
-        std::string ssh_key = view.GetString("ssh_key");
         std::cout << "Extracted fields: repo_url=" << repo_url << ", zip_filename=" << zip_filename << ", user_id=" << user_id << std::endl;
 
         Aws::Utils::DateTime dt;
@@ -149,6 +152,25 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string cron_expr = cron_expression(dt);
         std::string rule_name = "gits-" + std::to_string(now_tt);
 
+        // Create secrets for SSH key and GitHub token
+        std::string token_secret_name;
+        std::cout << "######################### " << github_token << std::endl;
+        if (!github_token.empty()) {
+            token_secret_name = "gits-token-" + rule_name;
+            CreateSecretRequest token_secret_request;
+            token_secret_request.SetName(token_secret_name);
+            token_secret_request.SetSecretString(github_token);
+            token_secret_request.SetDescription("GitHub token for gits job " + rule_name);
+            auto token_outcome = secrets_client.CreateSecret(token_secret_request);
+            if (!token_outcome.IsSuccess()) {
+                std::cerr << "Error: Failed to create token secret: " << token_outcome.GetError().GetMessage() << std::endl;
+                JsonValue error_body;
+                error_body.WithString("error", "Failed to create token secret: " + token_outcome.GetError().GetMessage());
+                return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
+            }
+            std::cout << "Token secret created: " << token_secret_name << std::endl;
+        }
+
         // Put rule
         std::cout << "Creating EventBridge rule: " << rule_name << ", cron: " << cron_expr << std::endl;
         PutRuleRequest rule_request;
@@ -170,13 +192,16 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::vector<JsonValue> env_vars_vector;
         env_vars_vector.push_back(JsonValue().WithString("name", "S3_PATH").WithString("value", s3_path).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "REPO_URL").WithString("value", repo_url).WithString("type", "PLAINTEXT"));
-        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN").WithString("value", github_token).WithString("type", "PLAINTEXT"));
+        if (!token_secret_name.empty()) {
+            env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN_SECRET").WithString("value", token_secret_name).WithString("type", "PLAINTEXT"));
+        } else {
+            env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN").WithString("value", github_token).WithString("type", "PLAINTEXT"));
+        }
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_USERNAME").WithString("value", github_username).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_DISPLAY_NAME").WithString("value", github_display_name).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_EMAIL").WithString("value", github_email).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "COMMIT_MESSAGE").WithString("value", commit_message.empty() ? "" : commit_message).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "USER_ID").WithString("value", user_id).WithString("type", "PLAINTEXT"));
-        env_vars_vector.push_back(JsonValue().WithString("name", "SSH_KEY").WithString("value", ssh_key).WithString("type", "PLAINTEXT"));
         Aws::Utils::Array<JsonValue> env_vars(env_vars_vector.data(), env_vars_vector.size());
         input_payload.WithArray("environmentVariablesOverride", env_vars);
 
@@ -257,9 +282,10 @@ int main() {
     S3Client s3_client(config);
     EventBridgeClient events_client(config);
     DynamoDBClient dynamodb_client(config);
+    SecretsManagerClient secrets_client(config);
 
     auto handler = [&](invocation_request const& req) {
-        return lambda_handler(req, s3_client, events_client, dynamodb_client);
+        return lambda_handler(req, s3_client, events_client, dynamodb_client, secrets_client);
     };
 
     run_handler(handler);

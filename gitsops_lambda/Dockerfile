@@ -8,7 +8,7 @@ RUN dnf install -y cmake gcc-c++ git libcurl-devel openssl-devel zlib-devel
 RUN git clone --recurse-submodules https://github.com/aws/aws-sdk-cpp.git && \
     cd aws-sdk-cpp && \
     mkdir build && cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="core;s3;eventbridge;dynamodb" -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_TESTING=OFF -DENABLE_UNITY_BUILD=ON &&\
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="core;s3;eventbridge;dynamodb;secretsmanager;" -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_TESTING=OFF -DENABLE_UNITY_BUILD=ON &&\
     make && make install
 
 # Clone and build aws-lambda-cpp runtime

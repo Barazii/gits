@@ -63,9 +63,6 @@ std::map<std::string, std::string> load_config() {
                     }
                     if (in_quote) {
                         std::cerr << "Error: Unclosed quote in config for key: " << key << std::endl;
-                        if (key == "SSH_KEY") {
-                            std::exit(1);
-                        }
                         continue;
                     }
                 } else {
@@ -516,7 +513,6 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
     auto github_username_it = config.find("GITHUB_USERNAME");
     auto github_display_name_it = config.find("GITHUB_DISPLAY_NAME");
     auto github_email_it = config.find("GITHUB_EMAIL");
-    auto ssh_key_it = config.find("SSH_KEY");
 
     if (api_url_it == config.end() || api_url_it->second.empty()) {
         std::cerr << "Error: API_GATEWAY_URL not set in ~/.gits/config" << std::endl;
@@ -527,17 +523,9 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         std::exit(1);
     }
 
-    bool is_https = repo_url.substr(0, 8) == "https://";
-    if (is_https) {
-        if (github_token_it == config.end() || github_token_it->second.empty()) {
-            std::cerr << "Error: GITHUB_TOKEN not set in ~/.gits/config for HTTPS repo" << std::endl;
-            std::exit(1);
-        }
-    } else {
-        if (ssh_key_it == config.end() || ssh_key_it->second.empty()) {
-            std::cerr << "Error: SSH_KEY not set in ~/.gits/config for SSH repo" << std::endl;
-            std::exit(1);
-        }
+    if (github_token_it == config.end() || github_token_it->second.empty()) {
+        std::cerr << "Error: GITHUB_TOKEN not set in ~/.gits/config" << std::endl;
+        std::exit(1);
     }
 
     std::string url = api_url_it->second + "/schedule";
@@ -546,13 +534,12 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         {"repo_url", repo_url},
         {"zip_filename", fs::path(zip_filename).filename().string()},
         {"zip_base64", zip_b64},
-        {"github_token", is_https ? (github_token_it != config.end() ? github_token_it->second : "") : ""},
+        {"github_token", github_token_it->second},
         {"github_username", github_username_it != config.end() ? github_username_it->second : ""},
         {"github_display_name", github_display_name_it != config.end() ? github_display_name_it->second : ""},
         {"github_email", github_email_it != config.end() ? github_email_it->second : ""},
         {"commit_message", commit_message},
-        {"user_id", user_id_it->second},
-        {"ssh_key", !is_https ? (ssh_key_it != config.end() ? ssh_key_it->second : "") : ""}
+        {"user_id", user_id_it->second}
     };
     std::string payload_str = payload.dump();
 

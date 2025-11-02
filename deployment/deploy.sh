@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 # Wrapper to run both backend and lambda deployments.
 # Usage:
 #   ./deployment/deploy.sh [--publish] [--backend-only | --lambda-only | --codebuildlense-only | --getstatus-only]
