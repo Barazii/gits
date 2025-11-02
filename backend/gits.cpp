@@ -513,7 +513,8 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
     auto api_url_it = config.find("API_GATEWAY_URL");
     auto github_token_it = config.find("GITHUB_TOKEN");
     auto user_id_it = config.find("USER_ID");
-    auto github_user_it = config.find("GITHUB_USER");
+    auto github_username_it = config.find("GITHUB_USERNAME");
+    auto github_display_name_it = config.find("GITHUB_DISPLAY_NAME");
     auto github_email_it = config.find("GITHUB_EMAIL");
     auto ssh_key_it = config.find("SSH_KEY");
 
@@ -546,7 +547,8 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         {"zip_filename", fs::path(zip_filename).filename().string()},
         {"zip_base64", zip_b64},
         {"github_token", is_https ? (github_token_it != config.end() ? github_token_it->second : "") : ""},
-        {"github_user", github_user_it != config.end() ? github_user_it->second : ""},
+        {"github_username", github_username_it != config.end() ? github_username_it->second : ""},
+        {"github_display_name", github_display_name_it != config.end() ? github_display_name_it->second : ""},
         {"github_email", github_email_it != config.end() ? github_email_it->second : ""},
         {"commit_message", commit_message},
         {"user_id", user_id_it->second},

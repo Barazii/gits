@@ -10,7 +10,7 @@ phases:
       - |
         case "$REPO_URL" in
           https://*)
-            git config --global credential.helper '!f() { echo "username=Barazii"; echo "password=$GITHUB_TOKEN"; }; f'
+            git config --global credential.helper '!f() { echo "username=$GITHUB_USERNAME"; echo "password=$GITHUB_TOKEN"; }; f'
             ;;
           *)
             mkdir -p ~/.ssh
@@ -20,7 +20,7 @@ phases:
             ;;
         esac
       - git config --global user.email $GITHUB_EMAIL
-      - git config --global user.name $GITHUB_USER
+      - git config --global user.name $GITHUB_DISPLAY_NAME
   build:
     commands:
       # Cloning target repository from github
