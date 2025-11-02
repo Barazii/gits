@@ -8,14 +8,17 @@ phases:
   pre_build:
     commands:
       - |
-        if [[ $REPO_URL == https://* ]]; then
-          git config --global credential.helper '!f() { echo "username=Barazii"; echo "password=$GITHUB_TOKEN"; }; f'
-        else
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-        fi
+        case "$REPO_URL" in
+          https://*)
+            git config --global credential.helper '!f() { echo "username=Barazii"; echo "password=$GITHUB_TOKEN"; }; f'
+            ;;
+          *)
+            mkdir -p ~/.ssh
+            echo "$SSH_KEY" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            ;;
+        esac
       - git config --global user.email $GITHUB_EMAIL
       - git config --global user.name $GITHUB_USER
   build:
