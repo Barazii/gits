@@ -27,6 +27,9 @@ namespace fs = std::filesystem;
 
 using json = nlohmann::json;
 
+// Internal API Gateway URL
+const std::string API_GATEWAY_URL = "https://wa4nqfqj58.execute-api.eu-north-1.amazonaws.com";
+
 // Function to trim whitespace from string
 std::string trim(const std::string& str) {
     auto start = std::find_if(str.begin(), str.end(), [](unsigned char ch) { return !std::isspace(ch); });
@@ -198,17 +201,12 @@ void handle_status(const std::map<std::string, std::string>& config) {
         std::cerr << "Error: Not a git repository" << std::endl;
         std::exit(1);
     }
-    auto api_url_it = config.find("API_GATEWAY_URL");
-    if (api_url_it == config.end() || api_url_it->second.empty()) {
-        std::cerr << "Error: API_GATEWAY_URL not set in ~/.gits/config" << std::endl;
-        std::exit(1);
-    }
     auto user_id_it = config.find("USER_ID");
     if (user_id_it == config.end() || user_id_it->second.empty()) {
         std::cerr << "Error: USER_ID not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
-    std::string url = api_url_it->second + "/status?user_id=" + user_id_it->second;
+    std::string url = API_GATEWAY_URL + "/status?user_id=" + user_id_it->second;
 
     CURL* curl = curl_easy_init();
     if (!curl) {
@@ -247,17 +245,12 @@ void handle_delete(const std::string& job_id, const std::map<std::string, std::s
         std::cerr << "Error: Not a git repository" << std::endl;
         std::exit(1);
     }
-    auto api_url_it = config.find("API_GATEWAY_URL");
-    if (api_url_it == config.end() || api_url_it->second.empty()) {
-        std::cerr << "Error: API_GATEWAY_URL not set in ~/.gits/config" << std::endl;
-        std::exit(1);
-    }
     auto user_id_it = config.find("USER_ID");
     if (user_id_it == config.end() || user_id_it->second.empty()) {
         std::cerr << "Error: USER_ID not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
-    std::string url = api_url_it->second + "/delete";
+    std::string url = API_GATEWAY_URL + "/delete";
     json payload = {
         {"job_id", job_id},
         {"user_id", user_id_it->second}
@@ -507,17 +500,12 @@ std::string base64_encode_file(const std::string& filename) {
 
 // Function to send schedule request
 void send_schedule_request(const std::string& schedule_time, const std::string& repo_url, const std::string& zip_filename, const std::string& zip_b64, const std::string& commit_message, const std::map<std::string, std::string>& config) {
-    auto api_url_it = config.find("API_GATEWAY_URL");
     auto github_token_it = config.find("GITHUB_TOKEN");
     auto user_id_it = config.find("USER_ID");
     auto github_username_it = config.find("GITHUB_USERNAME");
     auto github_display_name_it = config.find("GITHUB_DISPLAY_NAME");
     auto github_email_it = config.find("GITHUB_EMAIL");
 
-    if (api_url_it == config.end() || api_url_it->second.empty()) {
-        std::cerr << "Error: API_GATEWAY_URL not set in ~/.gits/config" << std::endl;
-        std::exit(1);
-    }
     if (user_id_it == config.end() || user_id_it->second.empty()) {
         std::cerr << "Error: USER_ID not set in ~/.gits/config" << std::endl;
         std::exit(1);
@@ -528,7 +516,7 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         std::exit(1);
     }
 
-    std::string url = api_url_it->second + "/schedule";
+    std::string url = API_GATEWAY_URL + "/schedule";
     json payload = {
         {"schedule_time", schedule_time},
         {"repo_url", repo_url},
