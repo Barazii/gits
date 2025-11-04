@@ -201,9 +201,9 @@ void handle_status(const std::map<std::string, std::string>& config) {
         std::cerr << "Error: Not a git repository" << std::endl;
         std::exit(1);
     }
-    auto user_id_it = config.find("USER_ID");
+    auto user_id_it = config.find("GITHUB_EMAIL");
     if (user_id_it == config.end() || user_id_it->second.empty()) {
-        std::cerr << "Error: USER_ID not set in ~/.gits/config" << std::endl;
+        std::cerr << "Error: GITHUB_EMAIL not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
     std::string url = API_GATEWAY_URL + "/status?user_id=" + user_id_it->second;
@@ -245,9 +245,9 @@ void handle_delete(const std::string& job_id, const std::map<std::string, std::s
         std::cerr << "Error: Not a git repository" << std::endl;
         std::exit(1);
     }
-    auto user_id_it = config.find("USER_ID");
+    auto user_id_it = config.find("GITHUB_EMAIL");
     if (user_id_it == config.end() || user_id_it->second.empty()) {
-        std::cerr << "Error: USER_ID not set in ~/.gits/config" << std::endl;
+        std::cerr << "Error: GITHUB_EMAIL not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
     std::string url = API_GATEWAY_URL + "/delete";
@@ -501,13 +501,12 @@ std::string base64_encode_file(const std::string& filename) {
 // Function to send schedule request
 void send_schedule_request(const std::string& schedule_time, const std::string& repo_url, const std::string& zip_filename, const std::string& zip_b64, const std::string& commit_message, const std::map<std::string, std::string>& config) {
     auto github_token_it = config.find("GITHUB_TOKEN");
-    auto user_id_it = config.find("USER_ID");
+    auto user_id_it = config.find("GITHUB_EMAIL");
     auto github_username_it = config.find("GITHUB_USERNAME");
     auto github_display_name_it = config.find("GITHUB_DISPLAY_NAME");
-    auto github_email_it = config.find("GITHUB_EMAIL");
 
     if (user_id_it == config.end() || user_id_it->second.empty()) {
-        std::cerr << "Error: USER_ID not set in ~/.gits/config" << std::endl;
+        std::cerr << "Error: GITHUB_EMAIL not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
 
@@ -525,7 +524,7 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         {"github_token", github_token_it->second},
         {"github_username", github_username_it != config.end() ? github_username_it->second : ""},
         {"github_display_name", github_display_name_it != config.end() ? github_display_name_it->second : ""},
-        {"github_email", github_email_it != config.end() ? github_email_it->second : ""},
+        {"github_email", user_id_it->second},
         {"commit_message", commit_message},
         {"user_id", user_id_it->second}
     };
