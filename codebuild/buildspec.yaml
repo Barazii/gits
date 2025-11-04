@@ -19,28 +19,35 @@ phases:
             if [ -n "$GITHUB_TOKEN_SECRET" ]; then
               GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "$GITHUB_TOKEN_SECRET" --query SecretString --output text)
             fi
-            mkdir -p ~/.ssh
-            # Generate SSH key pair
-            ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
-            chmod 600 ~/.ssh/id_rsa
-            # Start SSH agent and add key
-            eval "$(ssh-agent -s)"
-            ssh-add ~/.ssh/id_rsa
             # Extract owner/repo from REPO_URL (assuming git@github.com:owner/repo.git)
             REPO_PATH=$(echo $REPO_URL | sed 's/git@github.com://' | sed 's/.git$//')
             OWNER=$(echo $REPO_PATH | cut -d'/' -f1)
             REPO=$(echo $REPO_PATH | cut -d'/' -f2)
-            # Add deploy key via GitHub API
-            PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)
-            curl -f -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/$OWNER/$REPO/keys \
-              -d "{\"title\":\"CodeBuild Deploy Key\",\"key\":\"$PUBLIC_KEY\",\"read_only\":false}"
+            SECRET_NAME="github-deploy-key-${GITHUB_EMAIL}"
+            mkdir -p ~/.ssh
+            if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+              # Secret exists: retrieve and use the stored private key
+              PRIVATE_KEY=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
+              echo "$PRIVATE_KEY" > ~/.ssh/id_rsa
+            else
+              # Secret doesn't exist: generate new key pair, add to GitHub, and store private key
+              ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+              PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)
+              PRIVATE_KEY=$(cat ~/.ssh/id_rsa)
+              # Add deploy key via GitHub API (only once per repo)
+              curl -f -X POST \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                https://api.github.com/repos/$OWNER/$REPO/keys \
+                -d "{\"title\":\"CodeBuild Deploy Key\",\"key\":\"$PUBLIC_KEY\",\"read_only\":false}"
+              # Store private key in Secrets Manager
+              aws secretsmanager create-secret --name "$SECRET_NAME" --secret-string "$PRIVATE_KEY"
+            fi
+            chmod 600 ~/.ssh/id_rsa
+            # Start SSH agent and add key
+            eval "$(ssh-agent -s)"
+            ssh-add ~/.ssh/id_rsa
             ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-            echo "################# This is token: $GITHUB_TOKEN"
-            echo "$$$$$$$$$$$$$$$$ This is public key: $PUBLIC_KEY"
             ;;
         esac
       - git config --global user.email $GITHUB_EMAIL

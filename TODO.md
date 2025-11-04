@@ -18,4 +18,4 @@ discuss end to end encryption. conclusion: security comes from data injection at
 
 discuss schedule local time again. 
 
-when creating secret, make it one and check if exist then skip.
+test on macOS
