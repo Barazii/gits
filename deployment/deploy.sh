@@ -4,7 +4,7 @@ set -e
 
 # Wrapper to run both backend and lambda deployments.
 # Usage:
-#   ./deployment/deploy.sh [--publish] [--backend-only | --lambda-only | --codebuildlense-only | --getstatus-only]
+#   ./deployment/deploy.sh [--publish] [--backend-only] [--lambda-only] [--codebuildlense-only] [--getstatus-only] [--delete-only]
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
@@ -14,11 +14,11 @@ CODEBUILDLENSE_SCRIPT="$SCRIPT_DIR/../codebuildlense_lambda/deploy.sh"
 GETSTATUS_SCRIPT="$SCRIPT_DIR/../getstatus_lambda/deploy.sh"
 DELETE_SCRIPT="$SCRIPT_DIR/../delete_lambda/deploy.sh"
 
-RUN_BACKEND=true
-RUN_LAMBDA=true
-RUN_CODEBUILDLENSE=true
-RUN_GETSTATUS=true
-RUN_DELETE=true
+RUN_BACKEND=false
+RUN_LAMBDA=false
+RUN_CODEBUILDLENSE=false
+RUN_GETSTATUS=false
+RUN_DELETE=false
 LAMBDA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -28,51 +28,40 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--backend-only)
 			RUN_BACKEND=true
-			RUN_LAMBDA=false
-			RUN_CODEBUILDLENSE=false
-			RUN_GETSTATUS=false
-			RUN_DELETE=false
 			;;
 		--lambda-only)
-			RUN_BACKEND=false
 			RUN_LAMBDA=true
-			RUN_CODEBUILDLENSE=false
-			RUN_GETSTATUS=false
-			RUN_DELETE=false
 			;;
 		--codebuildlense-only)
-			RUN_BACKEND=false
-			RUN_LAMBDA=false
 			RUN_CODEBUILDLENSE=true
-			RUN_GETSTATUS=false
-			RUN_DELETE=false
 			;;
 		--getstatus-only)
-			RUN_BACKEND=false
-			RUN_LAMBDA=false
-			RUN_CODEBUILDLENSE=false
 			RUN_GETSTATUS=true
-			RUN_DELETE=false
 			;;
 		--delete-only)
-			RUN_BACKEND=false
-			RUN_LAMBDA=false
-			RUN_CODEBUILDLENSE=false
-			RUN_GETSTATUS=false
 			RUN_DELETE=true
 			;;
 		-h|--help)
-			echo "Usage: $0 [--publish] [--backend-only | --lambda-only | --codebuildlense-only | --getstatus-only | --delete-only]"
+			echo "Usage: $0 [--publish] [--backend-only] [--lambda-only] [--codebuildlense-only] [--getstatus-only] [--delete-only]"
 			exit 0
 			;;
 		*)
 			echo "Unknown argument: $1" >&2
-			echo "Usage: $0 [--publish] [--backend-only | --lambda-only | --codebuildlense-only | --getstatus-only | --delete-only]" >&2
+			echo "Usage: $0 [--publish] [--backend-only] [--lambda-only] [--codebuildlense-only] [--getstatus-only] [--delete-only]" >&2
 			exit 2
 			;;
 	esac
 	shift || true
 done
+
+# If no specific components specified, deploy all
+if ! $RUN_BACKEND && ! $RUN_LAMBDA && ! $RUN_CODEBUILDLENSE && ! $RUN_GETSTATUS && ! $RUN_DELETE; then
+	RUN_BACKEND=true
+	RUN_LAMBDA=true
+	RUN_CODEBUILDLENSE=true
+	RUN_GETSTATUS=true
+	RUN_DELETE=true
+fi
 
 # Ensure scripts exist and are executable
 [[ ! -f "$LAMBDA_SCRIPT" ]] && { echo "Error: $LAMBDA_SCRIPT not found" >&2; exit 1; }
@@ -107,4 +96,4 @@ if $RUN_DELETE; then
 	"$DELETE_SCRIPT" "${LAMBDA_ARGS[@]}" || { echo "Delete Lambda deployment failed" >&2; exit 1; }
 fi
 
-echo "All deployments completed."
+echo "All requested deployments completed."
