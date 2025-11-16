@@ -23,3 +23,5 @@ research about git tools and services like GitKraken
 add support to gitlab.
 
 discuss self host on clients own resources. (their AWS account or their on premises.)
+
+make IaC templates for the project.

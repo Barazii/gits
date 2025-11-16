@@ -33,6 +33,11 @@ const std::string API_GATEWAY_URL = "https://wa4nqfqj58.execute-api.eu-north-1.a
 
 // Function to trim whitespace from string
 std::string trim(const std::string& str) {
+    /*
+    // another implementation
+    path.erase(path.begin(), std::find_if(path.begin(), path.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+    path.erase(std::find_if(path.rbegin(), path.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), path.end());
+    */
     auto start = std::find_if(str.begin(), str.end(), [](unsigned char ch) { return !std::isspace(ch); });
     auto end = std::find_if(str.rbegin(), str.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base();
     return (start < end) ? std::string(start, end) : std::string();
@@ -148,7 +153,7 @@ Args parse_args(int argc, char* argv[]) {
             std::cerr << "Error: delete takes only --job_id <id>" << std::endl;
             std::exit(2);
         }
-    } else if (command == "-h" || command == "--help") {
+    } else if (command == "-h" || command == "--help" || command == "help") {
         std::cout << "Usage: gits <command> [options]" << std::endl;
         std::cout << "Commands:" << std::endl;
         std::cout << "  schedule <time> [--message <msg>] [--file <path>]..." << std::endl;
@@ -163,7 +168,7 @@ Args parse_args(int argc, char* argv[]) {
         std::exit(0);
     } else {
         std::cerr << "Error: unknown command: " << command << std::endl;
-        std::cerr << "Usage: gits <command> [options]" << std::endl;
+        std::cerr << "See 'gits --help'" << std::endl;
         std::exit(2);
     }
     return args;
@@ -173,8 +178,17 @@ Args parse_args(int argc, char* argv[]) {
 std::string exec_command(const std::string& cmd) {
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(cmd.c_str(), "r"), pclose);
-    if (!pipe) {
+    class Pipe {
+        public:
+            Pipe(FILE* f) : file(f) {}
+            ~Pipe() { if (file) pclose(file); }
+            FILE* get() { return file; }
+        private:
+            FILE* file;
+    };
+    // std::unique_ptr<FILE, int(*)(FILE*)> pipe(popen(cmd.c_str(), "r"), pclose);
+    Pipe pipe(popen(cmd.c_str(), "r"));
+    if (!pipe.get()) {
         throw std::runtime_error("popen() failed!");
     }
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
@@ -323,7 +337,6 @@ std::string get_repo_url() {
         bool is_ssh_url = output.substr(0, 10) == "ssh://git@";
         if (!is_https && !is_ssh_git && !is_ssh_url) {
             std::cerr << "Error: Repository URL must be HTTPS or SSH format for GitHub." << std::endl;
-            std::cerr << "Update your remote URL to HTTPS or SSH format." << std::endl;
             std::exit(1);
         }
         return output;
@@ -404,8 +417,7 @@ FileChanges gather_file_changes(const std::vector<std::string>& specified_files)
             char x = line[0], y = line[1];
             std::string path = line.substr(3);
             // Trim whitespace from path
-            path.erase(path.begin(), std::find_if(path.begin(), path.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-            path.erase(std::find_if(path.rbegin(), path.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), path.end());
+            path = trim(path);
             if ((x == 'A' && y == ' ') || (x == 'M' && y == ' ') || (x == ' ' && y == 'M') || (x == 'M' && y == 'M') || (x == '?' && y == '?')) {
                 changes.files_to_zip.push_back(path);
             }
@@ -589,6 +601,16 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
 
     if (github_token_it == config.end() || github_token_it->second.empty()) {
         std::cerr << "Error: GITHUB_TOKEN not set in ~/.gits/config" << std::endl;
+        std::exit(1);
+    }
+
+    if (github_username_it == config.end() || github_username_it->second.empty()) {
+        std::cerr << "Error: GITHUB_USERNAME not set in ~/.gits/config" << std::endl;
+        std::exit(1);
+    }
+
+    if (github_display_name_it == config.end() || github_display_name_it->second.empty()) {
+        std::cerr << "Error: GITHUB_DISPLAY_NAME not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
 
