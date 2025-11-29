@@ -91,6 +91,7 @@ struct Args {
     std::string commit_message;
     std::vector<std::string> files;
     std::string delete_job_id;
+    bool show_version = false;
 };
 
 // Function to parse command line arguments
@@ -102,10 +103,15 @@ Args parse_args(int argc, char* argv[]) {
         std::cerr << "  schedule <time> [--message <msg>] [--file <path>]..." << std::endl;
         std::cerr << "  status" << std::endl;
         std::cerr << "  delete --job_id <id>" << std::endl;
+        std::cerr << "  version" << std::endl;
         std::exit(2);
     }
     std::string command = argv[1];
     args.command = command;
+    if (command == "--version" or command == "version") {
+        args.show_version = true;
+        return args;
+    }
     if (command == "schedule") {
         if (argc < 3) {
             std::cerr << "Error: schedule requires a schedule time" << std::endl;
@@ -159,6 +165,7 @@ Args parse_args(int argc, char* argv[]) {
         std::cout << "  schedule <time> [--message <msg>] [--file <path>]..." << std::endl;
         std::cout << "  status" << std::endl;
         std::cout << "  delete --job_id <id>" << std::endl;
+        std::cout << "  version" << std::endl;
         std::cout << "Examples:" << std::endl;
         std::cout << "  gits schedule '2025-07-17T15:00:00Z' --message 'Fix: docs'" << std::endl;
         std::cout << "  gits schedule '2025-07-17T15:00:00Z' --file app.py --file README.md" << std::endl;
@@ -676,6 +683,17 @@ int main(int argc, char* argv[]) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
     auto config = load_config();
     auto args = parse_args(argc, argv);
+
+    // Handle version display
+    if (args.show_version) {
+#ifdef GITS_VERSION
+    std::cout << "gits " << GITS_VERSION << std::endl;
+#else
+    std::cout << "gits" << std::endl;
+#endif
+    curl_global_cleanup();
+    return 0;
+    }
 
     if (args.command == "status") {
         handle_status(config);
