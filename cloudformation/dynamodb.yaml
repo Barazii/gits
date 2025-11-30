@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB table for gits job scheduling (PK user_id, SK added_at) plus optional GSI on job_id.
+
+Parameters:
+  TableName:
+    Type: String
+    Default: gits-jobs
+  PointInTimeRecovery:
+    Type: String
+    AllowedValues: [ENABLED, DISABLED]
+    Default: ENABLED
+  BillingMode:
+    Type: String
+    AllowedValues: [PAY_PER_REQUEST, PROVISIONED]
+    Default: PAY_PER_REQUEST
+  ReadCapacityUnits:
+    Type: Number
+    Default: 5
+  WriteCapacityUnits:
+    Type: Number
+    Default: 5
+
+Conditions:
+  IsProvisioned: !Equals [!Ref BillingMode, PROVISIONED]
+  EnablePITR: !Equals [!Ref PointInTimeRecovery, ENABLED]
+
+Resources:
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: !If [IsProvisioned, PROVISIONED, PAY_PER_REQUEST]
+      ProvisionedThroughput: !If [IsProvisioned, { ReadCapacityUnits: !Ref ReadCapacityUnits, WriteCapacityUnits: !Ref WriteCapacityUnits }, !Ref 'AWS::NoValue']
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: added_at
+          AttributeType: N
+        - AttributeName: job_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: added_at
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: job_id-index
+          KeySchema:
+            - AttributeName: job_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput: !If [IsProvisioned, { ReadCapacityUnits: !Ref ReadCapacityUnits, WriteCapacityUnits: !Ref WriteCapacityUnits }, !Ref 'AWS::NoValue']
+      PointInTimeRecoverySpecification: !If [EnablePITR, { PointInTimeRecoveryEnabled: true }, !Ref 'AWS::NoValue']
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Project
+          Value: gits
+
+Outputs:
+  DynamoTableName:
+    Value: !Ref JobsTable
+    Export:
+      Name: gits-DynamoTableName

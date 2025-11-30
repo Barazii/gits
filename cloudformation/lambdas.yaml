@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Four Lambda functions (container image) for the gits project.
+Parameters:
+  ProjectName:
+    Type: String
+    Default: gits
+  ImageUriSchedule:
+    Type: String
+    Description: ECR image URI for schedule lambda.
+  ImageUriDelete:
+    Type: String
+    Description: ECR image URI for delete lambda.
+  ImageUriStatus:
+    Type: String
+    Description: ECR image URI for status lambda.
+  ImageUriCodeBuildLens:
+    Type: String
+    Description: ECR image URI for codebuildlens lambda.
+  DynamoTableName:
+    Type: String
+  ArtifactBucketName:
+    Type: String
+  CodeBuildProjectName:
+    Type: String
+  EventBridgeTargetRoleArnExportName:
+    Type: String
+    Default: gits-EventBridgeTargetRoleArn
+  EncryptionKeyHex:
+    Type: String
+    NoEcho: true
+    Default: a1c9ea82a565f0ec74c2ec92c1b46acaac296c7b78276a98acd143ce8ee14ce5
+
+Resources:
+  ScheduleLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-schedule'
+      Role:
+        Fn::ImportValue:
+          Fn::Sub: '${ProjectName}-ScheduleLambdaRoleArn'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUriSchedule
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoTableName
+          AWS_ACCOUNT_ID: !Ref 'AWS::AccountId'
+          AWS_APP_REGION: !Ref 'AWS::Region'
+          AWS_BUCKET_NAME: !Ref ArtifactBucketName
+          AWS_CODEBUILD_PROJECT_NAME: !Ref CodeBuildProjectName
+          EVENTBRIDGE_TARGET_ROLE_ARN: !ImportValue { 'Fn::Sub': '${EventBridgeTargetRoleArnExportName}' }
+          ENCRYPTION_KEY: !Ref EncryptionKeyHex
+      Tags:
+        - Key: Project
+          Value: gits
+  DeleteLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-delete'
+      Role:
+        Fn::ImportValue:
+          Fn::Sub: '${ProjectName}-DeleteLambdaRoleArn'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUriDelete
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoTableName
+      Tags:
+        - Key: Project
+          Value: gits
+  StatusLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-status'
+      Role:
+        Fn::ImportValue:
+          Fn::Sub: '${ProjectName}-StatusLambdaRoleArn'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUriStatus
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoTableName
+      Tags:
+        - Key: Project
+          Value: gits
+  CodeBuildLensLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-codebuildlens'
+      Role:
+        Fn::ImportValue:
+          Fn::Sub: '${ProjectName}-CodeBuildLensLambdaRoleArn'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUriCodeBuildLens
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoTableName
+      Tags:
+        - Key: Project
+          Value: gits
+
+Outputs:
+  ScheduleLambdaArn:
+    Value: !GetAtt ScheduleLambda.Arn
+    Export:
+      Name: !Sub '${ProjectName}-ScheduleLambdaArn'
+  DeleteLambdaArn:
+    Value: !GetAtt DeleteLambda.Arn
+    Export:
+      Name: !Sub '${ProjectName}-DeleteLambdaArn'
+  StatusLambdaArn:
+    Value: !GetAtt StatusLambda.Arn
+    Export:
+      Name: !Sub '${ProjectName}-StatusLambdaArn'
+  CodeBuildLensLambdaArn:
+    Value: !GetAtt CodeBuildLensLambda.Arn
+    Export:
+      Name: !Sub '${ProjectName}-CodeBuildLensLambdaArn'

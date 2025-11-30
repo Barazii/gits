@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EventBridge rule that triggers codebuildlens lambda on CodeBuild state change, plus permission.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: gits
+  CodeBuildLensLambdaArnExportName:
+    Type: String
+    Default: gits-CodeBuildLensLambdaArn
+
+Resources:
+  CodeBuildStateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-codebuild-state-change'
+      EventPattern:
+        source:
+          - aws.codebuild
+        detail-type:
+          - CodeBuild Build State Change
+        detail:
+          current-phase:
+            - COMPLETED
+      Targets:
+        - Id: CodeBuildLensLambda
+          Arn: !ImportValue { 'Fn::Sub': '${CodeBuildLensLambdaArnExportName}' }
+      Tags:
+        - Key: Project
+          Value: gits
+  LambdaInvokePermissionForEvents:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue { 'Fn::Sub': '${CodeBuildLensLambdaArnExportName}' }
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CodeBuildStateChangeRule.Arn
+
+Outputs:
+  CodeBuildStateChangeRuleArn:
+    Value: !GetAtt CodeBuildStateChangeRule.Arn
+    Export:
+      Name: !Sub '${ProjectName}-CodeBuildStateChangeRuleArn'

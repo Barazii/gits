@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 artifact bucket for gits uploaded change archives.
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: gits-artifacts
+  EnableVersioning:
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+  BlockPublicAccess:
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+  RetainOnDelete:
+    Type: String
+    AllowedValues: [true, false]
+    Default: false
+
+Conditions:
+  VersioningEnabled: !Equals [!Ref EnableVersioning, true]
+  PublicBlockEnabled: !Equals [!Ref BlockPublicAccess, true]
+  RetainBucket: !Equals [!Ref RetainOnDelete, true]
+
+Resources:
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: !If [RetainBucket, Retain, Delete]
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration: !If [VersioningEnabled, { Status: Enabled }, !Ref 'AWS::NoValue']
+      PublicAccessBlockConfiguration: !If [PublicBlockEnabled, { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }, !Ref 'AWS::NoValue']
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: gits
+  ArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: '*'
+            Action: s3:* 
+            Resource:
+              - !Sub 'arn:aws:s3:::${BucketName}'
+              - !Sub 'arn:aws:s3:::${BucketName}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+Outputs:
+  ArtifactBucketName:
+    Value: !Ref ArtifactBucket
+    Export:
+      Name: gits-ArtifactBucketName

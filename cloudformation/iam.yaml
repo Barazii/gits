@@ -1,0 +1,260 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM roles and policies for gits system (Lambdas, CodeBuild, EventBridge target role) - modular stack.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: gits
+  DynamoTableName:
+    Type: String
+    Description: Name of DynamoDB table used by lambdas.
+  ArtifactBucketName:
+    Type: String
+    Description: S3 bucket for uploaded change archives.
+  CodeBuildLogGroupArn:
+    Type: String
+    Default: ''
+    Description: Optional existing CloudWatch Logs group ARN for CodeBuild (leave blank to allow creation permissions anyway).
+
+Resources:
+  ScheduleLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-schedule-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ScheduleLambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoWrite
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}'
+              - Sid: EventBridgeCreateRules
+                Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:PutTargets
+                  - events:DescribeRule
+                Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/*'
+              - Sid: S3PutObject
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+              - Sid: SecretsManagerCreate
+                Effect: Allow
+                Action:
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*'
+              - Sid: PassRoleToEventBridge
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt EventBridgeTargetRole.Arn
+      Tags:
+        - Key: Project
+          Value: gits
+  DeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-delete-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DeleteLambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoReadDelete
+                Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:DeleteItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}'
+              - Sid: EventBridgeDeleteRules
+                Effect: Allow
+                Action:
+                  - events:RemoveTargets
+                  - events:DeleteRule
+                  - events:DescribeRule
+                Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/*'
+      Tags:
+        - Key: Project
+          Value: gits
+  StatusLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-status-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StatusLambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoQuery
+                Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}'
+      Tags:
+        - Key: Project
+          Value: gits
+  CodeBuildLensLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-codebuildlens-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CodeBuildLensLambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CodeBuildRead
+                Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:ListProjects
+                Resource: '*'
+              - Sid: DynamoQuery
+                Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}'
+      Tags:
+        - Key: Project
+          Value: gits
+  EventBridgeTargetRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-events-target'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowStartCodeBuild
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                Resource: !Sub 'arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:project/${ProjectName}'
+      Tags:
+        - Key: Project
+          Value: gits
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-codebuild-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildSecretsS3Logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CodeBuild
+                Effect: Allow
+                Action:
+                  - codebuild:*
+                Resource: '*'
+              - Sid: S3ReadArtifacts
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub 'arn:aws:s3:::${ArtifactBucketName}/*'
+              - Sid: SecretsManagerRead
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:CreateSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*'
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: gits
+
+Outputs:
+  ScheduleLambdaRoleArn:
+    Description: ARN of role assumed by Schedule Lambda function.
+    Value: !GetAtt ScheduleLambdaRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-ScheduleLambdaRoleArn'
+  DeleteLambdaRoleArn:
+    Description: ARN of role assumed by Delete Lambda function.
+    Value: !GetAtt DeleteLambdaRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-DeleteLambdaRoleArn'
+  StatusLambdaRoleArn:
+    Description: ARN of role assumed by GetStatus Lambda function.
+    Value: !GetAtt StatusLambdaRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-StatusLambdaRoleArn'
+  CodeBuildLensLambdaRoleArn:
+    Description: ARN of role assumed by CodeBuildLens Lambda function.
+    Value: !GetAtt CodeBuildLensLambdaRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-CodeBuildLensLambdaRoleArn'
+  EventBridgeTargetRoleArn:
+    Description: ARN of role used by EventBridge to invoke CodeBuild.
+    Value: !GetAtt EventBridgeTargetRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-EventBridgeTargetRoleArn'
+  CodeBuildServiceRoleArn:
+    Description: ARN of CodeBuild project service role.
+    Value: !GetAtt CodeBuildServiceRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-CodeBuildServiceRoleArn'

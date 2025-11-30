@@ -1,11 +1,11 @@
-# 🕐 gits - Git Scheduler
+# gits - Git Scheduler (Not up to date)
 
 [![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://python.org)
 [![Shell](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
 
 > A powerful event-driven serverless command-line tool to schedule Git commands for execution at specified times
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)

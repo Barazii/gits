@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CodeBuild project for gits system.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: gits
+  CodeBuildServiceRoleArnExportName:
+    Type: String
+    Default: gits-CodeBuildServiceRoleArn
+  ArtifactBucketName:
+    Type: String
+    Description: S3 bucket containing uploaded archives consumed by builds.
+  BuildImage:
+    Type: String
+    Default: aws/codebuild/standard:7.0
+  ComputeType:
+    Type: String
+    Default: BUILD_GENERAL1_SMALL
+  BuildSpecFile:
+    Type: String
+    Default: codebuild/buildspec.yaml
+
+Resources:
+  GitHubSourceCredential:
+    Type: AWS::CodeBuild::SourceCredential
+    Properties:
+      ServerType: GITHUB
+      AuthType: PERSONAL_ACCESS_TOKEN
+      Token: !Sub
+        - '{{resolve:secretsmanager:${GitHubTokenSecretArn}:SecretString:oauthToken}}'
+        - GitHubTokenSecretArn:
+            Fn::ImportValue:
+              Fn::Sub: '${ProjectName}-GitHubTokenSecretArn'
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${ProjectName}'
+      ServiceRole: !ImportValue { 'Fn::Sub': '${CodeBuildServiceRoleArnExportName}' }
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: !Ref BuildImage
+        ComputeType: !Ref ComputeType
+        PrivilegedMode: false
+      Source:
+        Type: GITHUB
+        Location: https://github.com/Barazii/gits
+        GitCloneDepth: 1
+        BuildSpec: !Ref BuildSpecFile
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/${ProjectName}'
+      QueuedTimeoutInMinutes: 30
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Project
+          Value: gits
+
+Outputs:
+  CodeBuildProjectName:
+    Value: !Ref CodeBuildProject
+    Export:
+      Name: !Sub '${ProjectName}-CodeBuildProjectName'

@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: API Gateway for gits system Lambdas.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: gits
+  ScheduleLambdaArnExportName:
+    Type: String
+    Default: gits-ScheduleLambdaArn
+  DeleteLambdaArnExportName:
+    Type: String
+    Default: gits-DeleteLambdaArn
+  StatusLambdaArnExportName:
+    Type: String
+    Default: gits-StatusLambdaArn
+
+Resources:
+  GitsApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-api'
+      Description: API Gateway for gits system
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ScheduleResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref GitsApi
+      ParentId: !GetAtt GitsApi.RootResourceId
+      PathPart: schedule
+
+  ScheduleMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref GitsApi
+      ResourceId: !Ref ScheduleResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue { 'Fn::Sub': '${ScheduleLambdaArnExportName}' }
+
+  DeleteResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref GitsApi
+      ParentId: !GetAtt GitsApi.RootResourceId
+      PathPart: delete
+
+  DeleteMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref GitsApi
+      ResourceId: !Ref DeleteResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue { 'Fn::Sub': '${DeleteLambdaArnExportName}' }
+
+  StatusResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref GitsApi
+      ParentId: !GetAtt GitsApi.RootResourceId
+      PathPart: status
+
+  StatusMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref GitsApi
+      ResourceId: !Ref StatusResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn: !ImportValue { 'Fn::Sub': '${StatusLambdaArnExportName}' }
+
+  ScheduleLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue { 'Fn::Sub': '${ScheduleLambdaArnExportName}' }
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GitsApi}/*/*/*'
+
+  DeleteLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue { 'Fn::Sub': '${DeleteLambdaArnExportName}' }
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GitsApi}/*/*/*'
+
+  StatusLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !ImportValue { 'Fn::Sub': '${StatusLambdaArnExportName}' }
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GitsApi}/*/*/*'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ScheduleMethod
+      - DeleteMethod
+      - StatusMethod
+    Properties:
+      RestApiId: !Ref GitsApi
+      StageName: prod
+
+Outputs:
+  ApiGatewayId:
+    Value: !Ref GitsApi
+    Export:
+      Name: !Sub '${ProjectName}-ApiGatewayId'
+  ApiUrl:
+    Value: !Sub 'https://${GitsApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${ProjectName}-ApiUrl'

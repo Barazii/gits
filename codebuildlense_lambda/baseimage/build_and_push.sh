@@ -4,8 +4,8 @@
 
 cd "$(dirname "$0")"
 ACCOUNT_ID=$(aws sts get-caller-identity --no-cli-pager --query Account --output text)
-REGION=eu-north-1
-REPO_NAME=codebuildlense-lambda-base
+REGION=eu-west-3
+REPO_NAME=gits-codebuildlens-lambda-base
 IMAGE_URI=$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest
 
 # Build

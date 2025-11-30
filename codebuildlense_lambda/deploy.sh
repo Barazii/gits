@@ -1,9 +1,8 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 ACCOUNT_ID=$(aws sts get-caller-identity --no-cli-pager --query Account --output text)
-REGION=eu-north-1
-REPO_NAME=codebuildlense-lambda
-FUNCTION_NAME=gitscodebuildlens
+REGION=eu-west-3
+REPO_NAME=gits-codebuildlens-lambda
 IMAGE_URI=$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest
 
 # Build & Push
@@ -14,10 +13,3 @@ if ! aws ecr describe-repositories --no-cli-pager --repository-names $REPO_NAME 
 fi
 docker tag $REPO_NAME:latest $IMAGE_URI
 docker push $IMAGE_URI
-
-# Deploy to Lambda
-aws lambda update-function-code \
-  --no-cli-pager \
-  --function-name $FUNCTION_NAME \
-  --image-uri $IMAGE_URI \
-  --publish

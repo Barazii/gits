@@ -1,0 +1,272 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECR repositories for gits Lambda container images.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: gits
+  ImageTagMutability:
+    Type: String
+    AllowedValues: [MUTABLE, IMMUTABLE]
+    Default: MUTABLE
+  ScanOnPush:
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+  EncryptionType:
+    Type: String
+    AllowedValues: [AES256, KMS]
+    Default: AES256
+  KmsKeyArn:
+    Type: String
+    Default: ''
+
+Conditions:
+  UseKms: !Equals [!Ref EncryptionType, KMS]
+
+Mappings:
+  RepoNames:
+    schedule: { name: schedule-lambda }
+    delete: { name: delete-lambda }
+    status: { name: status-lambda }
+    codebuildlens: { name: codebuildlens-lambda }
+    schedule-base: { name: schedule-lambda-base }
+    delete-base: { name: delete-lambda-base }
+    status-base: { name: status-lambda-base }
+    codebuildlens-base: { name: codebuildlens-lambda-base }
+
+Resources:
+  ScheduleRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, schedule, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+  ScheduleBaseRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, schedule-base, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+  DeleteRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, delete, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+  DeleteBaseRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, delete-base, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+  StatusRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, status, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+  StatusBaseRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, status-base, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+  CodeBuildLensRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, codebuildlens, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+  CodeBuildLensBaseRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub
+        - '${ProjectName}-${RepoName}'
+        - RepoName: !FindInMap [RepoNames, codebuildlens-base, name]
+      ImageScanningConfiguration:
+        ScanOnPush: !Ref ScanOnPush
+      ImageTagMutability: !Ref ImageTagMutability
+      EncryptionConfiguration:
+        EncryptionType: !Ref EncryptionType
+        KmsKey: !If [UseKms, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: gits
+
+Outputs:
+  ScheduleRepoUri:
+    Value: !Join ["", [!Ref 'AWS::AccountId', '.dkr.ecr.', !Ref 'AWS::Region', '.amazonaws.com/', !Ref ScheduleRepo]]
+    Export:
+      Name: !Sub '${ProjectName}-ScheduleRepoUri'
+  DeleteRepoUri:
+    Value: !Join ["", [!Ref 'AWS::AccountId', '.dkr.ecr.', !Ref 'AWS::Region', '.amazonaws.com/', !Ref DeleteRepo]]
+    Export:
+      Name: !Sub '${ProjectName}-DeleteRepoUri'
+  StatusRepoUri:
+    Value: !Join ["", [!Ref 'AWS::AccountId', '.dkr.ecr.', !Ref 'AWS::Region', '.amazonaws.com/', !Ref StatusRepo]]
+    Export:
+      Name: !Sub '${ProjectName}-StatusRepoUri'
+  CodeBuildLensRepoUri:
+    Value: !Join ["", [!Ref 'AWS::AccountId', '.dkr.ecr.', !Ref 'AWS::Region', '.amazonaws.com/', !Ref CodeBuildLensRepo]]
+    Export:
+      Name: !Sub '${ProjectName}-CodeBuildLensRepoUri'
