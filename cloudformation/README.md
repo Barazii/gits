@@ -62,7 +62,7 @@ aws cloudformation deploy \
   --stack-name gits-secret-manager \
   --template-file cloudformation/secretmanager.yaml \
   --region eu-west-3 \
-  --parameter-overrides ProjectName=gits
+  --parameter-overrides ProjectName=gits GitHubToken=<insert here>
 
 # 6. CodeBuild
 aws cloudformation deploy \

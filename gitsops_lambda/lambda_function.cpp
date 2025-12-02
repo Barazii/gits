@@ -26,7 +26,6 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 
-
 using namespace aws::lambda_runtime;
 using namespace Aws::Utils::Json;
 using namespace Aws::S3;
