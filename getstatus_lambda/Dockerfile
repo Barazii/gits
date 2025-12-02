@@ -1,5 +1,5 @@
 # Use the custom base image (build and push baseimage/Dockerfile to ECR first)
-FROM 482497089777.dkr.ecr.eu-north-1.amazonaws.com/getstatus-lambda-base:latest AS builder
+FROM 482497089777.dkr.ecr.eu-west-3.amazonaws.com/gits-status-lambda-base:latest AS builder
 
 # Create app directory
 RUN mkdir -p /app
