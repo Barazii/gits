@@ -24,10 +24,6 @@ add support to gitlab.
 
 discuss self host on clients own resources. (their AWS account or their on premises.)
 
-make IaC templates for the project.
-
 discuss the onboarding of aws hosting option.
 
 delete all code of encrypting the password using openssl as aws api gateway is https (is inherently encrypted)
-
-extend github action changes auto detection: base docker image change -> build them and push them. same to app-level docker images.
