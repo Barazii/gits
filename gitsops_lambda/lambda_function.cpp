@@ -12,6 +12,7 @@
 #include <aws/secretsmanager/SecretsManagerClient.h>
 #include <aws/secretsmanager/model/CreateSecretRequest.h>
 #include <aws/secretsmanager/model/DescribeSecretRequest.h>
+#include <aws/secretsmanager/model/UpdateSecretRequest.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/AttributeValue.h>
@@ -236,7 +237,7 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string cron_expr = cron_expression(dt);
         std::string rule_name = "gits-" + std::to_string(now_tt);
 
-        // Create secrets for SSH key and GitHub token
+        // Create secrets for GitHub token
         std::string token_secret_name;
         if (!github_token.empty()) {
             token_secret_name = "github-pat-" + github_email;
@@ -257,7 +258,18 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
                 }
                 std::cout << "Token secret created: " << token_secret_name << std::endl;
             } else {
-                std::cout << "Token secret already exists: " << token_secret_name << std::endl;
+                // Update existing secret
+                UpdateSecretRequest update_request;
+                update_request.SetSecretId(token_secret_name);
+                update_request.SetSecretString(github_token);
+                auto update_outcome = secrets_client.UpdateSecret(update_request);
+                if (!update_outcome.IsSuccess()) {
+                    std::cerr << "Error: Failed to update token secret: " << update_outcome.GetError().GetMessage() << std::endl;
+                    JsonValue error_body;
+                    error_body.WithString("error", "Failed to update token secret: " + update_outcome.GetError().GetMessage());
+                    return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
+                }
+                std::cout << "Token secret updated" << std::endl;
             }
         }
 

@@ -20,9 +20,6 @@ phases:
             if [ -n "$GITHUB_TOKEN_SECRET" ]; then
               GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "$GITHUB_TOKEN_SECRET" --query SecretString --output text)
             fi
-
-            echo "++++++++++++++++++++++++++++ ${GITHUB_TOKEN}"
-
             # Extract owner/repo from REPO_URL (assuming git@github.com:owner/repo.git)
             REPO_PATH=$(echo $REPO_URL | sed 's/git@github.com://' | sed 's/.git$//')
             OWNER=$(echo $REPO_PATH | cut -d'/' -f1)
@@ -39,15 +36,16 @@ phases:
               PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)
               PRIVATE_KEY=$(cat ~/.ssh/id_rsa)
               # Add deploy key via GitHub API (only once per repo)
-              if curl -f -X POST \
+              if RESPONSE=$(curl -s -X POST \
                 -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Accept: application/vnd.github.v3+json" \
                 https://api.github.com/repos/$OWNER/$REPO/keys \
-                -d "{\"title\":\"CodeBuild Deploy Key\",\"key\":\"$PUBLIC_KEY\",\"read_only\":false}"; then
+                -d "{\"title\":\"CodeBuild Deploy Key\",\"key\":\"$PUBLIC_KEY\",\"read_only\":false}" 2>&1); then
                 # Store private key in Secrets Manager only if API call succeeded
                 aws secretsmanager create-secret --name "$SECRET_NAME" --secret-string "$PRIVATE_KEY"
               else
-                echo "Failed to add deploy key to GitHub. Check GITHUB_TOKEN permissions."
+                echo "Failed to add deploy key to GitHub. Check GITHUB_TOKEN permissions or expire date."
+                echo "curl error message: $RESPONSE"
                 exit 1
               fi
             fi
