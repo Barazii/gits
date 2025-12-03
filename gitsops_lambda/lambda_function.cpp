@@ -22,9 +22,6 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
-#include <openssl/evp.h>
-#include <openssl/bio.h>
-#include <openssl/buffer.h>
 
 using namespace aws::lambda_runtime;
 using namespace Aws::Utils::Json;
@@ -49,64 +46,6 @@ std::string cron_expression(const Aws::Utils::DateTime& dt) {
     std::stringstream ss;
     ss << "cron(" << dt.GetMinute() << " " << dt.GetHour() << " " << dt.GetDay() << " " << static_cast<int>(dt.GetMonth()) + 1 << " ? " << dt.GetYear() << ")";
     return ss.str();
-}
-
-// Function to decrypt a base64-encoded string using AES-256-CBC
-std::string decrypt_token(const std::string& encrypted_b64, const std::string& iv_b64, const std::string& key_hex) {
-    // Convert hex key to bytes
-    std::string key;
-    for (size_t i = 0; i < key_hex.length(); i += 2) {
-        std::string byte_str = key_hex.substr(i, 2);
-        key += static_cast<char>(std::stoi(byte_str, nullptr, 16));
-    }
-    if (key.size() != 32) {
-        throw std::runtime_error("Invalid encryption key length");
-    }
-
-    // Base64 decode IV
-    BIO* b64_iv = BIO_new(BIO_f_base64());
-    BIO* bio_iv = BIO_new_mem_buf(iv_b64.c_str(), iv_b64.size());
-    bio_iv = BIO_push(b64_iv, bio_iv);
-    BIO_set_flags(bio_iv, BIO_FLAGS_BASE64_NO_NL);
-    std::vector<unsigned char> iv(16);
-    BIO_read(bio_iv, iv.data(), 16);
-    BIO_free_all(bio_iv);
-
-    // Base64 decode ciphertext
-    BIO* b64 = BIO_new(BIO_f_base64());
-    BIO* bio = BIO_new_mem_buf(encrypted_b64.c_str(), encrypted_b64.size());
-    bio = BIO_push(b64, bio);
-    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-    std::vector<unsigned char> ciphertext(encrypted_b64.size());
-    int ciphertext_len = BIO_read(bio, ciphertext.data(), encrypted_b64.size());
-    BIO_free_all(bio);
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) throw std::runtime_error("Failed to create cipher context");
-
-    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, reinterpret_cast<const unsigned char*>(key.c_str()), iv.data()) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Failed to initialize decryption");
-    }
-
-    std::vector<unsigned char> plaintext(ciphertext_len + EVP_MAX_BLOCK_LENGTH);
-    int len = 0, plaintext_len = 0;
-
-    if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(), ciphertext_len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Failed to decrypt data");
-    }
-    plaintext_len = len;
-
-    if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Failed to finalize decryption");
-    }
-    plaintext_len += len;
-
-    EVP_CIPHER_CTX_free(ctx);
-
-    return std::string(reinterpret_cast<char*>(plaintext.data()), plaintext_len);
 }
 
 JsonValue create_response(int status, const JsonValue& body) {
@@ -149,8 +88,7 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string repo_url = view.GetString("repo_url");
         std::string zip_filename = view.GetString("zip_filename");
         std::string zip_b64 = view.GetString("zip_base64");
-        std::string encrypted_github_token = view.GetString("encrypted_github_token");
-        std::string token_iv = view.GetString("token_iv");
+        std::string github_token = view.GetString("github_token");
         std::string github_username = view.GetString("github_username");
         std::string github_display_name = view.GetString("github_display_name");
         std::string github_email = view.GetString("github_email");
@@ -174,27 +112,6 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string project = getenv("AWS_CODEBUILD_PROJECT_NAME") ? getenv("AWS_CODEBUILD_PROJECT_NAME") : "";
         std::string account_id = getenv("AWS_ACCOUNT_ID") ? getenv("AWS_ACCOUNT_ID") : "";
         std::string target_role_arn = getenv("EVENTBRIDGE_TARGET_ROLE_ARN") ? getenv("EVENTBRIDGE_TARGET_ROLE_ARN") : "";
-
-        // Get encryption key from env
-        const char* key_env = getenv("ENCRYPTION_KEY");
-        if (!key_env) {
-            std::cerr << "Error: ENCRYPTION_KEY not set" << std::endl;
-            JsonValue error_body;
-            error_body.WithString("error", "ENCRYPTION_KEY not configured");
-            return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
-        }
-        std::string encryption_key = key_env;
-
-        // Decrypt token
-        std::string github_token;
-        try {
-            github_token = decrypt_token(encrypted_github_token, token_iv, encryption_key);
-        } catch (const std::exception& e) {
-            std::cerr << "Error decrypting token: " << e.what() << std::endl;
-            JsonValue error_body;
-            error_body.WithString("error", std::string("Decryption failed: ") + e.what());
-            return invocation_response::success(create_response(400, error_body).View().WriteCompact(), "application/json");
-        }
 
         // Decode zip
         Aws::Utils::Base64::Base64 base64;

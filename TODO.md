@@ -26,4 +26,4 @@ discuss self host on clients own resources. (their AWS account or their on premi
 
 discuss the onboarding of aws hosting option.
 
-delete all code of encrypting the password using openssl as aws api gateway is https (is inherently encrypted)
+delete all eu-north-1 resources -> delete eu-west-3 resources -> deploy eveything on eu-north-1 back again.

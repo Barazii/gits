@@ -21,7 +21,6 @@
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
-#include <openssl/rand.h>
 #include <zip.h>
 
 namespace fs = std::filesystem;
@@ -29,7 +28,8 @@ namespace fs = std::filesystem;
 using json = nlohmann::json;
 
 // Internal API Gateway URL
-const std::string API_GATEWAY_URL = "https://wa4nqfqj58.execute-api.eu-north-1.amazonaws.com";
+// const std::string API_GATEWAY_URL = "https://wa4nqfqj58.execute-api.eu-north-1.amazonaws.com";
+const std::string API_GATEWAY_URL = "https://2ttafwmdxa.execute-api.eu-west-3.amazonaws.com/prod";
 
 // Function to trim whitespace from string
 std::string trim(const std::string& str) {
@@ -533,67 +533,6 @@ std::string base64_encode_string(const std::string& input) {
     return encoded;
 }
 
-// Function to encrypt a string using AES-256-CBC
-std::pair<std::string, std::string> encrypt_token(const std::string& plaintext, const std::string& key_hex) {
-    // Convert hex key to bytes
-    std::string key;
-    for (size_t i = 0; i < key_hex.length(); i += 2) {
-        std::string byte_str = key_hex.substr(i, 2);
-        key += static_cast<char>(std::stoi(byte_str, nullptr, 16));
-    }
-    if (key.size() != 32) {
-        throw std::runtime_error("Invalid encryption key length");
-    }
-
-    // Generate random IV
-    unsigned char iv[16];
-    if (RAND_bytes(iv, sizeof(iv)) != 1) {
-        throw std::runtime_error("Failed to generate IV");
-    }
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) throw std::runtime_error("Failed to create cipher context");
-
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, reinterpret_cast<const unsigned char*>(key.c_str()), iv) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Failed to initialize encryption");
-    }
-
-    std::vector<unsigned char> ciphertext(plaintext.size() + EVP_MAX_BLOCK_LENGTH);
-    int len = 0, ciphertext_len = 0;
-
-    if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len, reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.size()) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Failed to encrypt data");
-    }
-    ciphertext_len = len;
-
-    if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw std::runtime_error("Failed to finalize encryption");
-    }
-    ciphertext_len += len;
-
-    EVP_CIPHER_CTX_free(ctx);
-
-    // Base64 encode ciphertext and IV
-    BIO* b64 = BIO_new(BIO_f_base64());
-    BIO* bio = BIO_new(BIO_s_mem());
-    bio = BIO_push(b64, bio);
-    BIO_write(bio, ciphertext.data(), ciphertext_len);
-    BIO_flush(bio);
-
-    BUF_MEM* buffer_ptr;
-    BIO_get_mem_ptr(bio, &buffer_ptr);
-    std::string encrypted_b64(buffer_ptr->data, buffer_ptr->length);
-    encrypted_b64.erase(std::remove(encrypted_b64.begin(), encrypted_b64.end(), '\n'), encrypted_b64.end());
-    BIO_free_all(bio);
-
-    std::string iv_b64 = base64_encode_string(std::string(reinterpret_cast<char*>(iv), 16));
-
-    return {encrypted_b64, iv_b64};
-}
-
 // Function to send schedule request
 void send_schedule_request(const std::string& schedule_time, const std::string& repo_url, const std::string& zip_filename, const std::string& zip_b64, const std::string& commit_message, const std::map<std::string, std::string>& config) {
     auto github_token_it = config.find("GITHUB_TOKEN");
@@ -621,21 +560,7 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         std::exit(1);
     }
 
-    auto encryption_key_it = config.find("ENCRYPTION_KEY");
-    if (encryption_key_it == config.end() || encryption_key_it->second.empty()) {
-        std::cerr << "Error: ENCRYPTION_KEY not found in config" << std::endl;
-        std::exit(1);
-    }
-
-    std::string encrypted_token, iv_b64;
-    try {
-        auto [enc, iv] = encrypt_token(github_token_it->second, encryption_key_it->second);
-        encrypted_token = enc;
-        iv_b64 = iv;
-    } catch (const std::exception& e) {
-        std::cerr << "Error encrypting token: " << e.what() << std::endl;
-        std::exit(1);
-    }
+    std::string github_token = github_token_it->second;
 
     std::string url = API_GATEWAY_URL + "/schedule";
     json payload = {
@@ -643,8 +568,7 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         {"repo_url", repo_url},
         {"zip_filename", fs::path(zip_filename).filename().string()},
         {"zip_base64", zip_b64},
-        {"encrypted_github_token", encrypted_token},
-        {"token_iv", iv_b64},
+        {"github_token", github_token},
         {"github_username", github_username_it != config.end() ? github_username_it->second : ""},
         {"github_display_name", github_display_name_it != config.end() ? github_display_name_it->second : ""},
         {"github_email", user_id_it->second},
