@@ -6,7 +6,7 @@ discuss deployment to users on their machines. installation on their machines. d
 
 make check for git repo and config variables defined at begining of program run. gits.cpp: duplicate check of current git repo.
 
-make --status --log. make --delete --deschedule. fix the names of components/modules mess.
+make --status --log. make --delete --deschedule or --cancel. fix the names of components/modules mess.
 
 discuss UI. ncursus.
 
@@ -27,3 +27,11 @@ discuss self host on clients own resources. (their AWS account or their on premi
 discuss the onboarding of aws hosting option.
 
 delete all eu-north-1 resources -> delete eu-west-3 resources -> deploy eveything on eu-north-1 back again.
+
+combine the 2 github action files. 
+
+make bash file to delpoy all templates together with permission to do that without errors.
+
+discuss vps for the whole cloud resources.
+
+add open source license 
