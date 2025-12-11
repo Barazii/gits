@@ -535,18 +535,12 @@ std::string base64_encode_string(const std::string& input) {
 
 // Function to send schedule request
 void send_schedule_request(const std::string& schedule_time, const std::string& repo_url, const std::string& zip_filename, const std::string& zip_b64, const std::string& commit_message, const std::map<std::string, std::string>& config) {
-    auto github_token_it = config.find("GITHUB_TOKEN");
     auto user_id_it = config.find("GITHUB_EMAIL");
     auto github_username_it = config.find("GITHUB_USERNAME");
     auto github_display_name_it = config.find("GITHUB_DISPLAY_NAME");
 
     if (user_id_it == config.end() || user_id_it->second.empty()) {
         std::cerr << "Error: GITHUB_EMAIL not set in ~/.gits/config" << std::endl;
-        std::exit(1);
-    }
-
-    if (github_token_it == config.end() || github_token_it->second.empty()) {
-        std::cerr << "Error: GITHUB_TOKEN not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
 
@@ -560,15 +554,12 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         std::exit(1);
     }
 
-    std::string github_token = github_token_it->second;
-
     std::string url = API_GATEWAY_URL + "/schedule";
     json payload = {
         {"schedule_time", schedule_time},
         {"repo_url", repo_url},
         {"zip_filename", fs::path(zip_filename).filename().string()},
         {"zip_base64", zip_b64},
-        {"github_token", github_token},
         {"github_username", github_username_it != config.end() ? github_username_it->second : ""},
         {"github_display_name", github_display_name_it != config.end() ? github_display_name_it->second : ""},
         {"github_email", user_id_it->second},

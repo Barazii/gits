@@ -227,6 +227,75 @@ Resources:
       Tags:
         - Key: Project
           Value: gits
+  CloudFormationDeploymentPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:CreateTable
+              - dynamodb:DescribeTable
+              - dynamodb:UpdateTable
+              - dynamodb:DeleteTable
+              - s3:CreateBucket
+              - s3:PutBucketVersioning
+              - s3:PutBucketEncryption
+              - s3:PutPublicAccessBlock
+              - s3:DeleteBucket
+              - iam:CreateRole
+              - iam:AttachRolePolicy
+              - iam:PutRolePolicy
+              - iam:CreatePolicy
+              - iam:DeleteRole
+              - iam:DetachRolePolicy
+              - iam:DeletePolicy
+              - ecr:CreateRepository
+              - ecr:DescribeRepositories
+              - ecr:DeleteRepository
+              - secretsmanager:CreateSecret
+              - secretsmanager:DescribeSecret
+              - secretsmanager:UpdateSecret
+              - secretsmanager:DeleteSecret
+              - codebuild:CreateProject
+              - codebuild:UpdateProject
+              - codebuild:DeleteProject
+              - lambda:CreateFunction
+              - lambda:UpdateFunctionCode
+              - lambda:DeleteFunction
+              - lambda:AddPermission
+              - events:PutRule
+              - events:PutTargets
+              - events:DeleteRule
+              - events:RemoveTargets
+              - apigateway:CreateRestApi
+              - apigateway:PutMethod
+              - apigateway:PutIntegration
+              - apigateway:CreateDeployment
+              - apigateway:DeleteRestApi
+              - cloudformation:CreateStack
+              - cloudformation:UpdateStack
+              - cloudformation:DeleteStack
+              - cloudformation:DescribeStacks
+            Resource: '*'
+      Description: Policy for CloudFormation deployment permissions
+  CloudFormationDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-cloudformation-deployment-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref CloudFormationDeploymentPolicy
+      Tags:
+        - Key: Project
+          Value: gits
 
 Outputs:
   ScheduleLambdaRoleArn:
@@ -259,3 +328,8 @@ Outputs:
     Value: !GetAtt CodeBuildServiceRole.Arn
     Export:
       Name: !Sub '${ProjectName}-CodeBuildServiceRoleArn'
+  CloudFormationDeploymentRoleArn:
+    Description: ARN of the CloudFormation deployment role.
+    Value: !GetAtt CloudFormationDeploymentRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-CloudFormationDeploymentRoleArn'

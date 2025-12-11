@@ -8,30 +8,17 @@ make check for git repo and config variables defined at begining of program run.
 
 make --status --log. make --delete --deschedule or --cancel. fix the names of components/modules mess.
 
-discuss UI. ncursus.
-
-discuss names for cli executables and SaaS name on the web. make the name gisch or gis or gsched or gtasker or gish. or gts. or gs. VersionSchedule. G!tSchedule. PushLater
-
-discuss end to end encryption. conclusion: for clients questioning, add their emails to github source code project and setup job/solution to notify them for any changes applied to the codebuild yaml file (?) or add their emails to aws account to receive notifications when changes applied to codebuild job IAM service role (?).
-
 discuss schedule local time again.    <<<-------
 
 test on macOS
 
-research about git tools and services like GitKraken
-
 add support to gitlab.
 
-discuss self host on clients own resources. (their AWS account or their on premises.)
-
-discuss the onboarding of aws hosting option.
-
 delete all eu-north-1 resources -> delete eu-west-3 resources -> deploy eveything on eu-north-1 back again.
+make bash file to delpoy all templates together with permission to do that without errors.
 
 combine the 2 github action files. 
 
-make bash file to delpoy all templates together with permission to do that without errors.
-
-discuss vps for the whole cloud resources.
+discuss vps for the whole cloud resources for optimised customised security
 
 add open source license 

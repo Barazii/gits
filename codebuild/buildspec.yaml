@@ -8,18 +8,13 @@ phases:
       - apt-get install -y git unzip jq openssh-client curl
   pre_build:
     commands:
+      - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "gits-github-token" --query 'SecretString' --output text | jq -r '.oauthToken // .')
       - |
         case "$REPO_URL" in
           https://*)
-            if [ -n "$GITHUB_TOKEN_SECRET" ]; then
-              GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "$GITHUB_TOKEN_SECRET" --query SecretString --output text)
-            fi
             git config --global credential.helper '!f() { echo "username=$GITHUB_USERNAME"; echo "password=$GITHUB_TOKEN"; }; f'
             ;;
           *)
-            if [ -n "$GITHUB_TOKEN_SECRET" ]; then
-              GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "$GITHUB_TOKEN_SECRET" --query SecretString --output text)
-            fi
             # Extract owner/repo from REPO_URL (assuming git@github.com:owner/repo.git)
             REPO_PATH=$(echo $REPO_URL | sed 's/git@github.com://' | sed 's/.git$//')
             OWNER=$(echo $REPO_PATH | cut -d'/' -f1)

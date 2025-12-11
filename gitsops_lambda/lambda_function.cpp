@@ -10,9 +10,6 @@
 #include <aws/eventbridge/model/PutRuleRequest.h>
 #include <aws/eventbridge/model/PutTargetsRequest.h>
 #include <aws/secretsmanager/SecretsManagerClient.h>
-#include <aws/secretsmanager/model/CreateSecretRequest.h>
-#include <aws/secretsmanager/model/DescribeSecretRequest.h>
-#include <aws/secretsmanager/model/UpdateSecretRequest.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/AttributeValue.h>
@@ -29,8 +26,6 @@ using namespace Aws::S3;
 using namespace Aws::S3::Model;
 using namespace Aws::EventBridge;
 using namespace Aws::EventBridge::Model;
-using namespace Aws::SecretsManager;
-using namespace Aws::SecretsManager::Model;
 using namespace Aws::DynamoDB;
 using namespace Aws::DynamoDB::Model;
 
@@ -56,7 +51,7 @@ JsonValue create_response(int status, const JsonValue& body) {
     return response;
 }
 
-invocation_response lambda_handler(invocation_request const& request, S3Client& s3_client, EventBridgeClient& events_client, DynamoDBClient& dynamodb_client, SecretsManagerClient& secrets_client) {
+invocation_response lambda_handler(invocation_request const& request, S3Client& s3_client, EventBridgeClient& events_client, DynamoDBClient& dynamodb_client) {
     try {
         std::cout << "Lambda handler started" << std::endl;
         JsonValue event_json(request.payload);
@@ -88,7 +83,6 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string repo_url = view.GetString("repo_url");
         std::string zip_filename = view.GetString("zip_filename");
         std::string zip_b64 = view.GetString("zip_base64");
-        std::string github_token = view.GetString("github_token");
         std::string github_username = view.GetString("github_username");
         std::string github_display_name = view.GetString("github_display_name");
         std::string github_email = view.GetString("github_email");
@@ -154,42 +148,6 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::string cron_expr = cron_expression(dt);
         std::string rule_name = "gits-" + std::to_string(now_tt);
 
-        // Create secrets for GitHub token
-        std::string token_secret_name;
-        if (!github_token.empty()) {
-            token_secret_name = "github-pat-" + github_email;
-            DescribeSecretRequest describe_request;
-            describe_request.SetSecretId(token_secret_name);
-            auto describe_outcome = secrets_client.DescribeSecret(describe_request);
-            if (!describe_outcome.IsSuccess()) {
-                CreateSecretRequest token_secret_request;
-                token_secret_request.SetName(token_secret_name);
-                token_secret_request.SetSecretString(github_token);
-                token_secret_request.SetDescription("GitHub token for gits job");
-                auto token_outcome = secrets_client.CreateSecret(token_secret_request);
-                if (!token_outcome.IsSuccess()) {
-                    std::cerr << "Error: Failed to create token secret: " << token_outcome.GetError().GetMessage() << std::endl;
-                    JsonValue error_body;
-                    error_body.WithString("error", "Failed to create token secret: " + token_outcome.GetError().GetMessage());
-                    return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
-                }
-                std::cout << "Token secret created: " << token_secret_name << std::endl;
-            } else {
-                // Update existing secret
-                UpdateSecretRequest update_request;
-                update_request.SetSecretId(token_secret_name);
-                update_request.SetSecretString(github_token);
-                auto update_outcome = secrets_client.UpdateSecret(update_request);
-                if (!update_outcome.IsSuccess()) {
-                    std::cerr << "Error: Failed to update token secret: " << update_outcome.GetError().GetMessage() << std::endl;
-                    JsonValue error_body;
-                    error_body.WithString("error", "Failed to update token secret: " + update_outcome.GetError().GetMessage());
-                    return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
-                }
-                std::cout << "Token secret updated" << std::endl;
-            }
-        }
-
         // Put rule
         std::cout << "Creating EventBridge rule: " << rule_name << ", cron: " << cron_expr << std::endl;
         PutRuleRequest rule_request;
@@ -211,7 +169,6 @@ invocation_response lambda_handler(invocation_request const& request, S3Client& 
         std::vector<JsonValue> env_vars_vector;
         env_vars_vector.push_back(JsonValue().WithString("name", "S3_PATH").WithString("value", s3_path).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "REPO_URL").WithString("value", repo_url).WithString("type", "PLAINTEXT"));
-        env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_TOKEN_SECRET").WithString("value", token_secret_name).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_USERNAME").WithString("value", github_username).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_DISPLAY_NAME").WithString("value", github_display_name).WithString("type", "PLAINTEXT"));
         env_vars_vector.push_back(JsonValue().WithString("name", "GITHUB_EMAIL").WithString("value", github_email).WithString("type", "PLAINTEXT"));
@@ -297,10 +254,9 @@ int main() {
     S3Client s3_client(config);
     EventBridgeClient events_client(config);
     DynamoDBClient dynamodb_client(config);
-    SecretsManagerClient secrets_client(config);
 
     auto handler = [&](invocation_request const& req) {
-        return lambda_handler(req, s3_client, events_client, dynamodb_client, secrets_client);
+        return lambda_handler(req, s3_client, events_client, dynamodb_client);
     };
 
     run_handler(handler);
