@@ -65,6 +65,14 @@ Resources:
                 Effect: Allow
                 Action: iam:PassRole
                 Resource: !GetAtt EventBridgeTargetRole.Arn
+              - Sid: ECRAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: '*'
       Tags:
         - Key: Project
           Value: gits
@@ -99,6 +107,14 @@ Resources:
                   - events:DeleteRule
                   - events:DescribeRule
                 Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/*'
+              - Sid: ECRAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: '*'
       Tags:
         - Key: Project
           Value: gits
@@ -125,6 +141,14 @@ Resources:
                 Action:
                   - dynamodb:Query
                 Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}'
+              - Sid: ECRAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: '*'
       Tags:
         - Key: Project
           Value: gits
@@ -157,6 +181,14 @@ Resources:
                 Action:
                   - dynamodb:Query
                 Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}'
+              - Sid: ECRAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: '*'
       Tags:
         - Key: Project
           Value: gits
@@ -239,45 +271,115 @@ Resources:
               - dynamodb:DescribeTable
               - dynamodb:UpdateTable
               - dynamodb:DeleteTable
+              - dynamodb:UpdateContinuousBackups
+              - dynamodb:DescribeContinuousBackups
+              - dynamodb:TagResource
+              - dynamodb:UntagResource
+              - dynamodb:ListTagsOfResource
               - s3:CreateBucket
               - s3:PutBucketVersioning
               - s3:PutBucketEncryption
+              - s3:PutEncryptionConfiguration
               - s3:PutPublicAccessBlock
+              - s3:PutBucketPublicAccessBlock
               - s3:DeleteBucket
+              - s3:GetBucketPolicy
+              - s3:PutBucketPolicy
+              - s3:DeleteBucketPolicy
+              - s3:GetBucketVersioning
+              - s3:GetEncryptionConfiguration
+              - s3:GetBucketPublicAccessBlock
+              - s3:ListBucket
+              - s3:PutBucketTagging
+              - s3:GetBucketTagging
               - iam:CreateRole
+              - iam:GetRole
+              - iam:UpdateRole
               - iam:AttachRolePolicy
               - iam:PutRolePolicy
+              - iam:GetRolePolicy
+              - iam:DeleteRolePolicy
               - iam:CreatePolicy
+              - iam:GetPolicy
               - iam:DeleteRole
               - iam:DetachRolePolicy
               - iam:DeletePolicy
+              - iam:PassRole
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:ListRolePolicies
+              - iam:ListAttachedRolePolicies
               - ecr:CreateRepository
               - ecr:DescribeRepositories
               - ecr:DeleteRepository
+              - ecr:GetRepositoryPolicy
+              - ecr:SetRepositoryPolicy
+              - ecr:PutImageScanningConfiguration
+              - ecr:PutLifecyclePolicy
+              - ecr:GetLifecyclePolicy
+              - ecr:DeleteLifecyclePolicy
+              - ecr:TagResource
+              - ecr:ListTagsForResource
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+              - ecr:PutImage
+              - ecr:DescribeImages
               - secretsmanager:CreateSecret
               - secretsmanager:DescribeSecret
               - secretsmanager:UpdateSecret
               - secretsmanager:DeleteSecret
+              - secretsmanager:GetSecretValue
+              - secretsmanager:TagResource
               - codebuild:CreateProject
               - codebuild:UpdateProject
               - codebuild:DeleteProject
+              - codebuild:BatchGetProjects
+              - codebuild:ImportSourceCredentials
+              - codebuild:DeleteSourceCredentials
               - lambda:CreateFunction
+              - lambda:GetFunction
               - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
               - lambda:DeleteFunction
               - lambda:AddPermission
+              - lambda:RemovePermission
+              - lambda:GetPolicy
+              - lambda:TagResource
+              - lambda:ListTags
               - events:PutRule
               - events:PutTargets
               - events:DeleteRule
               - events:RemoveTargets
-              - apigateway:CreateRestApi
-              - apigateway:PutMethod
-              - apigateway:PutIntegration
-              - apigateway:CreateDeployment
-              - apigateway:DeleteRestApi
+              - events:DescribeRule
+              - events:ListTargetsByRule
+              - events:TagResource
+              - apigateway:*
               - cloudformation:CreateStack
               - cloudformation:UpdateStack
               - cloudformation:DeleteStack
               - cloudformation:DescribeStacks
+              - cloudformation:DescribeStackEvents
+              - cloudformation:DescribeStackResources
+              - cloudformation:GetTemplate
+              - cloudformation:GetTemplateSummary
+              - cloudformation:ValidateTemplate
+              - cloudformation:CreateChangeSet
+              - cloudformation:DescribeChangeSet
+              - cloudformation:ExecuteChangeSet
+              - cloudformation:DeleteChangeSet
+              - cloudformation:ListChangeSets
+              - cloudformation:ListStackResources
+              - cloudformation:GetStackPolicy
+              - logs:CreateLogGroup
+              - logs:DeleteLogGroup
+              - logs:DescribeLogGroups
+              - logs:PutRetentionPolicy
+              - logs:TagLogGroup
             Resource: '*'
       Description: Policy for CloudFormation deployment permissions
   CloudFormationDeploymentRole:
@@ -289,7 +391,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+              AWS:
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:user/mahmood'
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - !Ref CloudFormationDeploymentPolicy
