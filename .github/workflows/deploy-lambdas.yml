@@ -1,0 +1,201 @@
+name: Deploy Lambda Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'codebuildlense_lambda/**'
+      - 'delete_lambda/**'
+      - 'getstatus_lambda/**'
+      - 'gitsops_lambda/**'
+  pull_request:
+    paths:
+      - 'codebuildlense_lambda/**'
+      - 'delete_lambda/**'
+      - 'getstatus_lambda/**'
+      - 'gitsops_lambda/**'
+
+env:
+  AWS_REGION: eu-west-3
+
+jobs:
+  deploy-codebuildlens:
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'codebuildlense_lambda/') ||
+      contains(github.event.head_commit.added, 'codebuildlense_lambda/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: codebuildlense_lambda/**
+
+      - name: Build and push base image
+        if: contains(steps.changed-files.outputs.all_changed_files, 'codebuildlense_lambda/baseimage/')
+        run: |
+          cd codebuildlense_lambda/baseimage
+          chmod +x build_and_push.sh
+          ./build_and_push.sh
+
+      - name: Build and push Lambda image
+        run: |
+          cd codebuildlense_lambda
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Update Lambda function
+        if: github.event_name == 'push'
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/gits-codebuildlens-lambda:latest"
+          aws lambda update-function-code \
+            --function-name gits-codebuildlens \
+            --image-uri "$IMAGE_URI" \
+            --no-cli-pager
+
+  deploy-delete:
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'delete_lambda/') ||
+      contains(github.event.head_commit.added, 'delete_lambda/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: delete_lambda/**
+
+      - name: Build and push base image
+        if: contains(steps.changed-files.outputs.all_changed_files, 'delete_lambda/baseimage/')
+        run: |
+          cd delete_lambda/baseimage
+          chmod +x build_and_push.sh
+          ./build_and_push.sh
+
+      - name: Build and push Lambda image
+        run: |
+          cd delete_lambda
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Update Lambda function
+        if: github.event_name == 'push'
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/gits-delete-lambda:latest"
+          aws lambda update-function-code \
+            --function-name gits-delete \
+            --image-uri "$IMAGE_URI" \
+            --no-cli-pager
+
+  deploy-getstatus:
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'getstatus_lambda/') ||
+      contains(github.event.head_commit.added, 'getstatus_lambda/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: getstatus_lambda/**
+
+      - name: Build and push base image
+        if: contains(steps.changed-files.outputs.all_changed_files, 'getstatus_lambda/baseimage/')
+        run: |
+          cd getstatus_lambda/baseimage
+          chmod +x build_and_push.sh
+          ./build_and_push.sh
+
+      - name: Build and push Lambda image
+        run: |
+          cd getstatus_lambda
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Update Lambda function
+        if: github.event_name == 'push'
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/gits-status-lambda:latest"
+          aws lambda update-function-code \
+            --function-name gits-status \
+            --image-uri "$IMAGE_URI" \
+            --no-cli-pager
+
+  deploy-gitsops:
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.head_commit.modified, 'gitsops_lambda/') ||
+      contains(github.event.head_commit.added, 'gitsops_lambda/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: gitsops_lambda/**
+
+      - name: Build and push base image
+        if: contains(steps.changed-files.outputs.all_changed_files, 'gitsops_lambda/baseimage/')
+        run: |
+          cd gitsops_lambda/baseimage
+          chmod +x build_and_push.sh
+          ./build_and_push.sh
+
+      - name: Build and push Lambda image
+        run: |
+          cd gitsops_lambda
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Update Lambda function
+        if: github.event_name == 'push'
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/gits-schedule-lambda:latest"
+          aws lambda update-function-code \
+            --function-name gits-schedule \
+            --image-uri "$IMAGE_URI" \
+            --no-cli-pager
