@@ -25,10 +25,6 @@ Parameters:
   EventBridgeTargetRoleArnExportName:
     Type: String
     Default: gits-EventBridgeTargetRoleArn
-  EncryptionKeyHex:
-    Type: String
-    NoEcho: true
-    Default: a1c9ea82a565f0ec74c2ec92c1b46acaac296c7b78276a98acd143ce8ee14ce5
 
 Resources:
   ScheduleLambda:
@@ -43,6 +39,11 @@ Resources:
         ImageUri: !Ref ImageUriSchedule
       Timeout: 30
       MemorySize: 512
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
@@ -51,7 +52,6 @@ Resources:
           AWS_BUCKET_NAME: !Ref ArtifactBucketName
           AWS_CODEBUILD_PROJECT_NAME: !Ref CodeBuildProjectName
           EVENTBRIDGE_TARGET_ROLE_ARN: !ImportValue { 'Fn::Sub': '${EventBridgeTargetRoleArnExportName}' }
-          ENCRYPTION_KEY: !Ref EncryptionKeyHex
       Tags:
         - Key: Project
           Value: gits
@@ -67,6 +67,11 @@ Resources:
         ImageUri: !Ref ImageUriDelete
       Timeout: 30
       MemorySize: 256
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
@@ -85,6 +90,11 @@ Resources:
         ImageUri: !Ref ImageUriStatus
       Timeout: 15
       MemorySize: 256
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
@@ -103,6 +113,11 @@ Resources:
         ImageUri: !Ref ImageUriCodeBuildLens
       Timeout: 30
       MemorySize: 256
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName

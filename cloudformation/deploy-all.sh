@@ -106,6 +106,8 @@ deploy_stack "gits-dynamodb" "dynamodb.yaml" "" "TableName=${PROJECT_NAME}-jobs 
 
 deploy_stack "gits-secret-manager" "secretmanager.yaml" "" "ProjectName=$PROJECT_NAME GitHubToken=$GITHUB_TOKEN"
 
+deploy_stack "gits-vpc" "vpc.yaml" "" "ProjectName=$PROJECT_NAME"
+
 deploy_stack "gits-codebuild" "codebuild.yaml" "" "ProjectName=$PROJECT_NAME ArtifactBucketName=${PROJECT_NAME}-artifacts"
 
 deploy_stack "gits-lambdas" "lambdas.yaml" "--capabilities CAPABILITY_IAM" "ProjectName=$PROJECT_NAME DynamoTableName=${PROJECT_NAME}-jobs ArtifactBucketName=${PROJECT_NAME}-artifacts CodeBuildProjectName=$PROJECT_NAME ImageUriSchedule=$IMAGE_URI_SCHEDULE ImageUriDelete=$IMAGE_URI_DELETE ImageUriStatus=$IMAGE_URI_STATUS ImageUriCodeBuildLens=$IMAGE_URI_CODEBUILD_LENS"

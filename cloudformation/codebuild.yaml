@@ -44,6 +44,12 @@ Resources:
         Image: !Ref BuildImage
         ComputeType: !Ref ComputeType
         PrivilegedMode: false
+      VpcConfig:
+        VpcId: !ImportValue { 'Fn::Sub': '${ProjectName}-VpcId' }
+        Subnets:
+          - !ImportValue { 'Fn::Sub': '${ProjectName}-PrivateSubnetId' }
+        SecurityGroupIds:
+          - !ImportValue { 'Fn::Sub': '${ProjectName}-CodeBuildSecurityGroupId' }
       Source:
         Type: GITHUB
         Location: https://github.com/Barazii/gits
