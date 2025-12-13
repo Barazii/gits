@@ -43,6 +43,11 @@ Resources:
         ImageUri: !Ref ImageUriSchedule
       Timeout: 30
       MemorySize: 512
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
@@ -67,6 +72,11 @@ Resources:
         ImageUri: !Ref ImageUriDelete
       Timeout: 30
       MemorySize: 256
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
@@ -85,6 +95,11 @@ Resources:
         ImageUri: !Ref ImageUriStatus
       Timeout: 15
       MemorySize: 256
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
@@ -103,6 +118,11 @@ Resources:
         ImageUri: !Ref ImageUriCodeBuildLens
       Timeout: 30
       MemorySize: 256
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub '${ProjectName}-LambdaSecurityGroupId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
