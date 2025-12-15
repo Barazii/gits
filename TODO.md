@@ -13,7 +13,3 @@ discuss schedule local time again.    <<<-------
 test on macOS
 
 add support to gitlab.
-
-discuss vps for the whole cloud resources for optimised customised security
-
-add open source license 
