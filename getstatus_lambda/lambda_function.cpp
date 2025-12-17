@@ -52,8 +52,7 @@ static invocation_response my_handler(invocation_request const& request)
     }
     std::cout << "Extracted user_id: " << user_id << std::endl;
 
-    const char* region_env = std::getenv("AWS_APP_REGION");
-    std::string region = region_env ? region_env : "eu-north-1";
+    std::string region = std::getenv("AWS_APP_REGION");
     std::cout << "Using region: " << region << std::endl;
 
     const char* table_env = std::getenv("DYNAMODB_TABLE");

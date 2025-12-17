@@ -75,6 +75,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
+          AWS_APP_REGION: !Ref 'AWS::Region'
       Tags:
         - Key: Project
           Value: gits
@@ -98,6 +99,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
+          AWS_APP_REGION: !Ref 'AWS::Region'
       Tags:
         - Key: Project
           Value: gits
@@ -121,6 +123,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
+          AWS_APP_REGION: !Ref 'AWS::Region'
       Tags:
         - Key: Project
           Value: gits

@@ -28,8 +28,7 @@ namespace fs = std::filesystem;
 using json = nlohmann::json;
 
 // Internal API Gateway URL
-// const std::string API_GATEWAY_URL = "https://wa4nqfqj58.execute-api.eu-north-1.amazonaws.com";
-const std::string API_GATEWAY_URL = "https://2ttafwmdxa.execute-api.eu-west-3.amazonaws.com/prod";
+const std::string API_GATEWAY_URL = "https://vsnnc6acu4.execute-api.eu-west-3.amazonaws.com/prod";
 
 // Function to trim whitespace from string
 std::string trim(const std::string& str) {

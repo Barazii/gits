@@ -66,7 +66,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
             return invocation_response::success(create_response(400, error_body).View().WriteCompact(), "application/json");
         }
 
-        std::string region = getenv("AWS_APP_REGION") ? getenv("AWS_APP_REGION") : "eu-north-1";
+        std::string region = getenv("AWS_APP_REGION");
         std::string table_name = getenv("DYNAMODB_TABLE") ? getenv("DYNAMODB_TABLE") : "";
         if (table_name.empty()) {
             std::cerr << "DYNAMODB_TABLE environment variable not set" << std::endl;
@@ -75,44 +75,7 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
 
-        // Delete EventBridge rule
-        std::cout << "Deleting EventBridge rule: " << job_id << std::endl;
-        try {
-            // First remove targets
-            RemoveTargetsRequest remove_targets_request;
-            remove_targets_request.SetRule(job_id);
-            remove_targets_request.SetIds({"Target1"});
-            remove_targets_request.SetForce(true);
-            auto remove_outcome = events_client.RemoveTargets(remove_targets_request);
-            if (!remove_outcome.IsSuccess()) {
-                std::cerr << "Warning: Failed to remove targets: " << remove_outcome.GetError().GetMessage() << std::endl;
-            }
-
-            // Then delete the rule
-            DeleteRuleRequest delete_rule_request;
-            delete_rule_request.SetName(job_id);
-            delete_rule_request.SetForce(true);
-            auto delete_outcome = events_client.DeleteRule(delete_rule_request);
-            if (!delete_outcome.IsSuccess()) {
-                if (delete_outcome.GetError().GetErrorType() == EventBridgeErrors::RESOURCE_NOT_FOUND) {
-                    std::cerr << "Rule " << job_id << " not found" << std::endl;
-                } else {
-                    std::cerr << "Failed to delete EventBridge rule: " << delete_outcome.GetError().GetMessage() << std::endl;
-                    JsonValue error_body;
-                    error_body.WithString("error", "Failed to delete EventBridge rule: " + delete_outcome.GetError().GetMessage());
-                    return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
-                }
-            } else {
-                std::cout << "Deleted EventBridge rule: " << job_id << std::endl;
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "Error deleting rule: " << e.what() << std::endl;
-            JsonValue error_body;
-            error_body.WithString("error", std::string("Error deleting rule: ") + e.what());
-            return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
-        }
-
-        // Delete DynamoDB item
+        // Query DynamoDB item
         std::cout << "Querying DynamoDB for job_id: " << job_id << ", user_id: " << user_id << std::endl;
         try {
             // Query to find the item with matching job_id
@@ -147,8 +110,54 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
 
             auto& item = items[0];
             std::string added_at = item.at("added_at").GetN();
+            std::string status = item.at("status").GetS();
 
-            // Delete the item
+            // Check if job is pending
+            if (status != "pending") {
+                std::cerr << "Cannot unschedule a job that is not pending. Current status: " << status << std::endl;
+                JsonValue error_body;
+                error_body.WithString("error", "Cannot unschedule a job that is not pending");
+                return invocation_response::success(create_response(400, error_body).View().WriteCompact(), "application/json");
+            }
+
+            // Only if pending, remove the CodeBuild target job (EventBridge rule)
+            std::cout << "Deleting EventBridge rule: " << job_id << std::endl;
+            try {
+                // First remove targets
+                RemoveTargetsRequest remove_targets_request;
+                remove_targets_request.SetRule(job_id);
+                remove_targets_request.SetIds({"Target1"});
+                remove_targets_request.SetForce(true);
+                auto remove_outcome = events_client.RemoveTargets(remove_targets_request);
+                if (!remove_outcome.IsSuccess()) {
+                    std::cerr << "Warning: Failed to remove targets: " << remove_outcome.GetError().GetMessage() << std::endl;
+                }
+
+                // Then delete the rule
+                DeleteRuleRequest delete_rule_request;
+                delete_rule_request.SetName(job_id);
+                delete_rule_request.SetForce(true);
+                auto delete_outcome = events_client.DeleteRule(delete_rule_request);
+                if (!delete_outcome.IsSuccess()) {
+                    if (delete_outcome.GetError().GetErrorType() == EventBridgeErrors::RESOURCE_NOT_FOUND) {
+                        std::cerr << "Rule " << job_id << " not found" << std::endl;
+                    } else {
+                        std::cerr << "Failed to delete EventBridge rule: " << delete_outcome.GetError().GetMessage() << std::endl;
+                        JsonValue error_body;
+                        error_body.WithString("error", "Failed to delete EventBridge rule: " + delete_outcome.GetError().GetMessage());
+                        return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
+                    }
+                } else {
+                    std::cout << "Deleted EventBridge rule: " << job_id << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error deleting rule: " << e.what() << std::endl;
+                JsonValue error_body;
+                error_body.WithString("error", std::string("Error deleting rule: ") + e.what());
+                return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
+            }
+
+            // Delete the item from DynamoDB
             std::cout << "Deleting DynamoDB item: user_id=" << user_id << ", added_at=" << added_at << std::endl;
             DeleteItemRequest delete_request;
             delete_request.SetTableName(table_name);
@@ -175,9 +184,9 @@ invocation_response lambda_handler(invocation_request const& request, EventBridg
             return invocation_response::success(create_response(500, error_body).View().WriteCompact(), "application/json");
         }
 
-        std::cout << "Job deleted successfully" << std::endl;
+        std::cout << "Job unscheduled successfully" << std::endl;
         JsonValue success_body;
-        success_body.WithString("message", "Job deleted successfully");
+        success_body.WithString("message", "Job unscheduled successfully");
         return invocation_response::success(create_response(200, success_body).View().WriteCompact(), "application/json");
 
     } catch (const std::exception& e) {
@@ -193,7 +202,7 @@ int main() {
     Aws::InitAPI(options);
 
     Aws::Client::ClientConfiguration config;
-    config.region = getenv("AWS_APP_REGION") ? getenv("AWS_APP_REGION") : "eu-north-1";
+    config.region = getenv("AWS_APP_REGION");
 
     EventBridgeClient events_client(config);
     DynamoDBClient dynamodb_client(config);

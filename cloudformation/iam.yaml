@@ -201,6 +201,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - dynamodb:Query
+                  - dynamodb:UpdateItem
                 Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoTableName}'
               - Sid: ECRAccess
                 Effect: Allow
@@ -290,6 +291,11 @@ Resources:
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeSubnets
                   - ec2:DescribeVpcs
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:CreateNetworkInterface
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DescribeDhcpOptions
+                  - ec2:CreateNetworkInterfacePermission
                 Resource: '*'
       Tags:
         - Key: Project

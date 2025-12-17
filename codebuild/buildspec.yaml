@@ -10,6 +10,15 @@ phases:
     commands:
       - GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id "gits-github-token" --query 'SecretString' --output text | jq -r '.oauthToken // .')
       - |
+        echo "Testing connectivity to GitHub API..."
+        RESPONSE=$(curl -I https://api.github.com 2>&1)
+        if echo "$RESPONSE" | grep -q "200"; then
+          echo "Connectivity to GitHub OK"
+        else
+          echo "Failed to connect to GitHub: $RESPONSE"
+          exit 1
+        fi
+      - |
         case "$REPO_URL" in
           https://*)
             git config --global credential.helper '!f() { echo "username=$GITHUB_USERNAME"; echo "password=$GITHUB_TOKEN"; }; f'
@@ -19,36 +28,38 @@ phases:
             REPO_PATH=$(echo $REPO_URL | sed 's/git@github.com://' | sed 's/.git$//')
             OWNER=$(echo $REPO_PATH | cut -d'/' -f1)
             REPO=$(echo $REPO_PATH | cut -d'/' -f2)
-            SECRET_NAME="github-deploy-key-${GITHUB_EMAIL}-${OWNER}"
+            SECRET_NAME="${OWNER}-github-deploy-key-${GITHUB_EMAIL}"
             mkdir -p ~/.ssh
-            if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
-              # Secret exists: retrieve and use the stored private key
-              PRIVATE_KEY=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
-              echo "$PRIVATE_KEY" > ~/.ssh/id_rsa
-            else
-              # Secret doesn't exist: generate new key pair, add to GitHub, and store private key
+            chmod 700 ~/.ssh
+            PRIVATE_KEY=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text 2>/dev/null || echo "")
+            if [ -z "$PRIVATE_KEY" ]; then
+              # Secret doesn't exist or is deleted: generate new key pair, add to GitHub, and store private key
               ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
               PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)
               PRIVATE_KEY=$(cat ~/.ssh/id_rsa)
               # Add deploy key via GitHub API (only once per repo)
-              if RESPONSE=$(curl -s -X POST \
+              RESPONSE=$(curl -s -X POST \
                 -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Accept: application/vnd.github.v3+json" \
                 https://api.github.com/repos/$OWNER/$REPO/keys \
-                -d "{\"title\":\"CodeBuild Deploy Key\",\"key\":\"$PUBLIC_KEY\",\"read_only\":false}" 2>&1); then
+                -d "{\"title\":\"CodeBuild Deploy Key\",\"key\":\"$PUBLIC_KEY\",\"read_only\":false}")
+              if [ $? -eq 0 ] && echo "$RESPONSE" | jq -e '.id' >/dev/null; then
                 # Store private key in Secrets Manager only if API call succeeded
                 aws secretsmanager create-secret --name "$SECRET_NAME" --secret-string "$PRIVATE_KEY"
               else
                 echo "Failed to add deploy key to GitHub. Check GITHUB_TOKEN permissions or expire date."
-                echo "curl error message: $RESPONSE"
+                echo "curl response: $RESPONSE"
                 exit 1
               fi
+            else
+              echo "$PRIVATE_KEY" > ~/.ssh/id_rsa
             fi
-            chmod 600 ~/.ssh/id_rsa
             # Start SSH agent and add key
+            chmod 600 ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/known_hosts
             eval "$(ssh-agent -s)"
             ssh-add ~/.ssh/id_rsa
-            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            ssh-keyscan github.com >> ~/.ssh/known_hosts || true
             ;;
         esac
       - git config --global user.email $GITHUB_EMAIL

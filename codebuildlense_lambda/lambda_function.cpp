@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <chrono>
 
 using namespace aws::lambda_runtime;
 using namespace Aws::Utils::Json;
@@ -48,10 +50,16 @@ invocation_response lambda_handler(invocation_request const& request, CodeBuildC
 
         // Get build details
         std::cout << "Getting build details for build_id: " << build_id << std::endl;
+        // Wait a bit for the build to be available
+        std::this_thread::sleep_for(std::chrono::seconds(2));
         BatchGetBuildsRequest batch_request;
         batch_request.SetIds({build_id});
         auto batch_outcome = codebuild_client.BatchGetBuilds(batch_request);
-        if (!batch_outcome.IsSuccess() || batch_outcome.GetResult().GetBuilds().empty()) {
+        if (!batch_outcome.IsSuccess()) {
+            std::cerr << "BatchGetBuilds failed: " << batch_outcome.GetError().GetMessage() << std::endl;
+            return invocation_response::success(create_response(500, "Failed to get build details").View().WriteCompact(), "application/json");
+        }
+        if (batch_outcome.GetResult().GetBuilds().empty()) {
             std::cerr << "No build found for id: " << build_id << std::endl;
             return invocation_response::success(create_response(404, "Build not found").View().WriteCompact(), "application/json");
         }
@@ -138,7 +146,7 @@ int main() {
     Aws::InitAPI(options);
 
     Aws::Client::ClientConfiguration config;
-    config.region = getenv("AWS_APP_REGION") ? getenv("AWS_APP_REGION") : "eu-north-1";
+    config.region = getenv("AWS_APP_REGION");
 
     CodeBuildClient codebuild_client(config);
     DynamoDBClient dynamodb_client(config);
