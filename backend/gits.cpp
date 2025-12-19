@@ -166,9 +166,9 @@ Args parse_args(int argc, char* argv[]) {
         std::cout << "  delete --job_id <id>" << std::endl;
         std::cout << "  version" << std::endl;
         std::cout << "Examples:" << std::endl;
-        std::cout << "  gits schedule '2025-07-17T15:00:00Z' --message 'Fix: docs'" << std::endl;
-        std::cout << "  gits schedule '2025-07-17T15:00:00Z' --file app.py --file README.md" << std::endl;
-        std::cout << "  gits schedule '2025-07-17T15:00:00Z' --file app.py,README.md" << std::endl;
+        std::cout << "  gits schedule 2025-07-17T15:00 --message 'Fix: docs'" << std::endl;
+        std::cout << "  gits schedule 2025-07-17T15:00 --file app.py --file README.md" << std::endl;
+        std::cout << "  gits schedule 2025-07-17T15:00 --file app.py,README.md" << std::endl;
         std::cout << "  gits status" << std::endl;
         std::cout << "  gits delete --job_id job-123" << std::endl;
         std::exit(0);
@@ -305,26 +305,36 @@ void handle_delete(const std::string& job_id, const std::map<std::string, std::s
 }
 
 // Function to validate schedule time
-bool validate_schedule_time(const std::string& time_str) {
-    std::regex iso_regex(R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$)");
-    if (!std::regex_match(time_str, iso_regex)) {
-        std::cerr << "Error: Time must be in ISO 8601 UTC format: YYYY-MM-DDTHH:MM:SSZ (e.g. 2025-07-17T15:00:00Z)" << std::endl;
+bool validate_schedule_time(std::string& time_str) {
+    std::regex time_regex(R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$)");
+    if (!std::regex_match(time_str, time_regex)) {
+        std::cerr << "Error: Time must be in format: YYYY-MM-DDTHH:MM (local time, e.g. 2025-07-17T15:00)" << std::endl;
         return false;
     }
     std::tm tm = {};
     std::istringstream ss(time_str);
-    ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M");
     if (ss.fail()) {
         std::cerr << "Error: Invalid time format." << std::endl;
         return false;
     }
-    tm.tm_isdst = 0;  // Ensure no DST adjustment
-    auto tp = std::chrono::system_clock::from_time_t(timegm(&tm));
+    tm.tm_sec = 0;
+    tm.tm_isdst = -1;  // Let mktime determine DST
+    time_t local_time = mktime(&tm);
+    if (local_time == -1) {
+        std::cerr << "Error: Invalid time." << std::endl;
+        return false;
+    }
+    auto tp = std::chrono::system_clock::from_time_t(local_time);
     auto now = std::chrono::system_clock::now();
     if (tp <= now) {
         std::cerr << "Error: Schedule time must be in the future." << std::endl;
         return false;
     }
+    // Convert to UTC ISO8601
+    std::ostringstream oss;
+    oss << std::put_time(std::gmtime(&local_time), "%FT%TZ");
+    time_str = oss.str();
     return true;
 }
 
