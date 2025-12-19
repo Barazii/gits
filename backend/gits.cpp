@@ -99,7 +99,7 @@ Args parse_args(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: gits <command> [options]" << std::endl;
         std::cerr << "Commands:" << std::endl;
-        std::cerr << "  schedule <time> [--message <msg>] [--file <path>]..." << std::endl;
+        std::cerr << "  schedule --schedule_time <time> [--message <msg>] [--file <path>]..." << std::endl;
         std::cerr << "  status" << std::endl;
         std::cerr << "  delete --job_id <id>" << std::endl;
         std::cerr << "  version" << std::endl;
@@ -112,14 +112,17 @@ Args parse_args(int argc, char* argv[]) {
         return args;
     }
     if (command == "schedule") {
-        if (argc < 3) {
-            std::cerr << "Error: schedule requires a schedule time" << std::endl;
-            std::exit(2);
-        }
-        args.schedule_time = argv[2];
-        for (int i = 3; i < argc; ++i) {
+        bool has_schedule_time = false;
+        for (int i = 2; i < argc; ++i) {
             std::string arg = argv[i];
-            if (arg == "--message") {
+            if (arg == "--schedule_time") {
+                if (i + 1 >= argc) {
+                    std::cerr << "Error: --schedule_time requires a time value" << std::endl;
+                    std::exit(2);
+                }
+                args.schedule_time = argv[++i];
+                has_schedule_time = true;
+            } else if (arg == "--message") {
                 if (i + 1 >= argc) {
                     std::cerr << "Error: --message requires a commit message" << std::endl;
                     std::exit(2);
@@ -143,6 +146,10 @@ Args parse_args(int argc, char* argv[]) {
                 std::exit(2);
             }
         }
+        if (!has_schedule_time) {
+            std::cerr << "Error: schedule requires --schedule_time <time>" << std::endl;
+            std::exit(2);
+        }
     } else if (command == "status") {
         if (argc > 2) {
             std::cerr << "Error: status takes no arguments" << std::endl;
@@ -161,14 +168,14 @@ Args parse_args(int argc, char* argv[]) {
     } else if (command == "-h" || command == "--help" || command == "help") {
         std::cout << "Usage: gits <command> [options]" << std::endl;
         std::cout << "Commands:" << std::endl;
-        std::cout << "  schedule <time> [--message <msg>] [--file <path>]..." << std::endl;
+        std::cout << "  schedule --schedule_time <time> [--message <msg>] [--file <path>]..." << std::endl;
         std::cout << "  status" << std::endl;
         std::cout << "  delete --job_id <id>" << std::endl;
         std::cout << "  version" << std::endl;
         std::cout << "Examples:" << std::endl;
-        std::cout << "  gits schedule 2025-07-17T15:00 --message 'Fix: docs'" << std::endl;
-        std::cout << "  gits schedule 2025-07-17T15:00 --file app.py --file README.md" << std::endl;
-        std::cout << "  gits schedule 2025-07-17T15:00 --file app.py,README.md" << std::endl;
+        std::cout << "  gits schedule --schedule_time 2025-07-17T15:00 --message 'Fix: docs'" << std::endl;
+        std::cout << "  gits schedule --schedule_time 2025-07-17T15:00 --file app.py --file README.md" << std::endl;
+        std::cout << "  gits schedule --schedule_time 2025-07-17T15:00 --file app.py,README.md" << std::endl;
         std::cout << "  gits status" << std::endl;
         std::cout << "  gits delete --job_id job-123" << std::endl;
         std::exit(0);
