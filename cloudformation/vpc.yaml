@@ -144,6 +144,7 @@ Resources:
         - !Ref PrivateSubnet
       SecurityGroupIds:
         - !Ref LambdaSecurityGroup
+        - !Ref CodeBuildSecurityGroup
 
   EventBridgeEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -178,17 +179,6 @@ Resources:
       SecurityGroupIds:
         - !Ref LambdaSecurityGroup
 
-  CloudWatchLogsEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
-      VpcEndpointType: Interface
-      SubnetIds:
-        - !Ref PrivateSubnet
-      SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
-
   # Security Groups
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -203,6 +193,15 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-lambda-sg'
+
+  LambdaSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
   CodeBuildSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -225,6 +224,15 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-codebuild-sg'
+
+  CodeBuildSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CodeBuildSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref CodeBuildSecurityGroup
 
 Outputs:
   VpcId:
