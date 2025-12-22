@@ -143,7 +143,6 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
         - !Ref CodeBuildSecurityGroup
 
   EventBridgeEndpoint:
@@ -155,7 +154,8 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref DeleteLambdaSG
+        - !Ref GitsOpsLambdaSG
 
   EcrApiEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -166,7 +166,10 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref CodeBuildLenseLambdaSG
+        - !Ref DeleteLambdaSG
+        - !Ref GetStatusLambdaSG
+        - !Ref GitsOpsLambdaSG
 
   EcrDkrEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -177,13 +180,27 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref CodeBuildLenseLambdaSG
+        - !Ref DeleteLambdaSG
+        - !Ref GetStatusLambdaSG
+        - !Ref GitsOpsLambdaSG
+
+  CodeBuildEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.codebuild'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref CodeBuildLenseLambdaSG
 
   # Security Groups
-  LambdaSecurityGroup:
+  CodeBuildLenseLambdaSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for Lambda functions
+      GroupDescription: Security group for CodeBuildLense Lambda
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -192,16 +209,49 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-lambda-sg'
+          Value: !Sub '${ProjectName}-codebuildlense-lambda-sg'
 
-  LambdaSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
+  DeleteLambdaSG:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupId: !Ref LambdaSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      GroupDescription: Security group for Delete Lambda
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-delete-lambda-sg'
+
+  GetStatusLambdaSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for GetStatus Lambda
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-getstatus-lambda-sg'
+
+  GitsOpsLambdaSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for GitsOps Lambda
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-gitsops-lambda-sg'
 
   CodeBuildSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -225,15 +275,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-codebuild-sg'
 
-  CodeBuildSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref CodeBuildSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      SourceSecurityGroupId: !Ref CodeBuildSecurityGroup
-
 Outputs:
   VpcId:
     Description: VPC ID
@@ -247,11 +288,29 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-PrivateSubnetId'
 
-  LambdaSecurityGroupId:
-    Description: Lambda Security Group ID
-    Value: !Ref LambdaSecurityGroup
+  CodeBuildLenseLambdaSGId:
+    Description: CodeBuildLense Lambda Security Group ID
+    Value: !Ref CodeBuildLenseLambdaSG
     Export:
-      Name: !Sub '${ProjectName}-LambdaSecurityGroupId'
+      Name: !Sub '${ProjectName}-CodeBuildLenseLambdaSGId'
+
+  DeleteLambdaSGId:
+    Description: Delete Lambda Security Group ID
+    Value: !Ref DeleteLambdaSG
+    Export:
+      Name: !Sub '${ProjectName}-DeleteLambdaSGId'
+
+  GetStatusLambdaSGId:
+    Description: GetStatus Lambda Security Group ID
+    Value: !Ref GetStatusLambdaSG
+    Export:
+      Name: !Sub '${ProjectName}-GetStatusLambdaSGId'
+
+  GitsOpsLambdaSGId:
+    Description: GitsOps Lambda Security Group ID
+    Value: !Ref GitsOpsLambdaSG
+    Export:
+      Name: !Sub '${ProjectName}-GitsOpsLambdaSGId'
 
   CodeBuildSecurityGroupId:
     Description: CodeBuild Security Group ID

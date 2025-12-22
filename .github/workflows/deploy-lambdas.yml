@@ -9,12 +9,6 @@ on:
       - 'delete_lambda/**'
       - 'getstatus_lambda/**'
       - 'gitsops_lambda/**'
-  pull_request:
-    paths:
-      - 'codebuildlense_lambda/**'
-      - 'delete_lambda/**'
-      - 'getstatus_lambda/**'
-      - 'gitsops_lambda/**'
 
 env:
   AWS_REGION: eu-west-3
@@ -22,9 +16,6 @@ env:
 jobs:
   deploy-codebuildlens:
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'codebuildlense_lambda/') ||
-      contains(github.event.head_commit.added, 'codebuildlense_lambda/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -67,9 +58,6 @@ jobs:
 
   deploy-delete:
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'delete_lambda/') ||
-      contains(github.event.head_commit.added, 'delete_lambda/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -112,9 +100,6 @@ jobs:
 
   deploy-getstatus:
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'getstatus_lambda/') ||
-      contains(github.event.head_commit.added, 'getstatus_lambda/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -157,9 +142,6 @@ jobs:
 
   deploy-gitsops:
     runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'gitsops_lambda/') ||
-      contains(github.event.head_commit.added, 'gitsops_lambda/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

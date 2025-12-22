@@ -9,7 +9,6 @@
 #include <aws/eventbridge/EventBridgeClient.h>
 #include <aws/eventbridge/model/PutRuleRequest.h>
 #include <aws/eventbridge/model/PutTargetsRequest.h>
-#include <aws/secretsmanager/SecretsManagerClient.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/AttributeValue.h>

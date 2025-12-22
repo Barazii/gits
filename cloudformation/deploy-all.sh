@@ -112,6 +112,14 @@ deploy_stack "gits-codebuild" "codebuild.yaml" "" "ProjectName=$PROJECT_NAME Art
 
 deploy_stack "gits-lambdas" "lambdas.yaml" "--capabilities CAPABILITY_IAM" "ProjectName=$PROJECT_NAME DynamoTableName=${PROJECT_NAME}-jobs ArtifactBucketName=${PROJECT_NAME}-artifacts CodeBuildProjectName=$PROJECT_NAME ImageUriSchedule=$IMAGE_URI_SCHEDULE ImageUriDelete=$IMAGE_URI_DELETE ImageUriStatus=$IMAGE_URI_STATUS ImageUriCodeBuildLens=$IMAGE_URI_CODEBUILD_LENS"
 
+# Update Lambda functions in case they were already created 
+echo "Updating Lambda functions..."
+aws lambda update-function-code --function-name gits-schedule --image-uri $IMAGE_URI_SCHEDULE --region $REGION --no-cli-pager
+aws lambda update-function-code --function-name gits-delete --image-uri $IMAGE_URI_DELETE --region $REGION --no-cli-pager
+aws lambda update-function-code --function-name gits-status --image-uri $IMAGE_URI_STATUS --region $REGION --no-cli-pager
+aws lambda update-function-code --function-name gits-codebuildlens --image-uri $IMAGE_URI_CODEBUILD_LENS --region $REGION --no-cli-pager
+echo "Lambda functions updated successfully."
+
 deploy_stack "gits-events" "eventbridge.yaml" "" "ProjectName=$PROJECT_NAME"
 
 deploy_stack "gits-apigateway" "apigateway.yaml" "" "ProjectName=$PROJECT_NAME"
