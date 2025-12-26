@@ -143,7 +143,8 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref CodeBuildSecurityGroup
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
 
   EventBridgeEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -154,8 +155,8 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref DeleteLambdaSG
-        - !Ref GitsOpsLambdaSG
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
 
   EcrApiEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -166,10 +167,8 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref CodeBuildLenseLambdaSG
-        - !Ref DeleteLambdaSG
-        - !Ref GetStatusLambdaSG
-        - !Ref GitsOpsLambdaSG
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
 
   EcrDkrEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -180,10 +179,8 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref CodeBuildLenseLambdaSG
-        - !Ref DeleteLambdaSG
-        - !Ref GetStatusLambdaSG
-        - !Ref GitsOpsLambdaSG
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
 
   CodeBuildEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -194,7 +191,8 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet
       SecurityGroupIds:
-        - !Ref CodeBuildLenseLambdaSG
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
 
   # Security Groups
   CodeBuildLenseLambdaSG:
@@ -274,6 +272,22 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-codebuild-sg'
+  
+  # Security group for VPC Interface Endpoints - allows inbound HTTPS from VPC
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VPC Interface Endpoints
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+          Description: Allow HTTPS from within VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-endpoint-sg'
 
 Outputs:
   VpcId:
@@ -317,3 +331,9 @@ Outputs:
     Value: !Ref CodeBuildSecurityGroup
     Export:
       Name: !Sub '${ProjectName}-CodeBuildSecurityGroupId'
+
+  VpcEndpointSecurityGroupId:
+    Description: VPC Endpoint Security Group ID
+    Value: !Ref VpcEndpointSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-VpcEndpointSecurityGroupId'
