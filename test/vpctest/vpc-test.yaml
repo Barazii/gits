@@ -1,0 +1,505 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC Security Test Stack - Deploys test EC2 instances to verify network isolation and connectivity.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: gits
+  TestResultsBucket:
+    Type: String
+    Description: S3 bucket to store test results (will use artifact bucket).
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type for test instances.
+  AmiId:
+    Type: String
+    Description: AMI ID for test instances (Amazon Linux 2023).
+  AutoCleanupMinutes:
+    Type: Number
+    Default: 30
+    Description: Minutes before auto-cleanup of test resources.
+
+Resources:
+  # =============================================================================
+  # IAM Role for deploying this test stack (self-contained permissions)
+  # =============================================================================
+  VpcTestDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-vpc-test-deployment-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: VpcTestDeploymentPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # EC2 instance management
+              - Sid: EC2Instances
+                Effect: Allow
+                Action:
+                  - ec2:RunInstances
+                  - ec2:DescribeInstances
+                  - ec2:TerminateInstances
+                  - ec2:DescribeImages
+                  - ec2:DescribeInstanceStatus
+                  - ec2:CreateTags
+                  - ec2:DescribeTags
+                Resource: '*'
+              # Security groups for test instances
+              - Sid: SecurityGroups
+                Effect: Allow
+                Action:
+                  - ec2:CreateSecurityGroup
+                  - ec2:DeleteSecurityGroup
+                  - ec2:DescribeSecurityGroups
+                  - ec2:AuthorizeSecurityGroupEgress
+                  - ec2:RevokeSecurityGroupEgress
+                Resource: '*'
+              # VPC read access
+              - Sid: VpcRead
+                Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeNetworkInterfaces
+                Resource: '*'
+              # IAM for instance profiles
+              - Sid: IAM
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:CreateInstanceProfile
+                  - iam:DeleteInstanceProfile
+                  - iam:AddRoleToInstanceProfile
+                  - iam:RemoveRoleFromInstanceProfile
+                  - iam:GetInstanceProfile
+                  - iam:PassRole
+                  - iam:TagRole
+                Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectName}-vpc-test-*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:instance-profile/${ProjectName}-vpc-test-*'
+              # Lambda for aggregator
+              - Sid: Lambda
+                Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:InvokeFunction
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                  - lambda:TagResource
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-vpc-test-*'
+              # EventBridge for aggregator trigger
+              - Sid: EventBridge
+                Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                  - events:DescribeRule
+                Resource: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/${ProjectName}-vpc-test-*'
+              # S3 for test results
+              - Sid: S3
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${TestResultsBucket}'
+                  - !Sub 'arn:aws:s3:::${TestResultsBucket}/vpc-tests/*'
+              # CloudWatch Logs
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:DescribeLogGroups
+                Resource: '*'
+              # CloudFormation (for self-management)
+              - Sid: CloudFormation
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackResources
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: vpc-test
+
+  # =============================================================================
+  # IAM Role for Test Instances (SSM + S3 for results)
+  # =============================================================================
+  TestInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-vpc-test-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: TestInstancePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3Access
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${TestResultsBucket}'
+                  - !Sub 'arn:aws:s3:::${TestResultsBucket}/*'
+              - Sid: DynamoDBAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:ListTables
+                  - dynamodb:DescribeTable
+                Resource: '*'
+              - Sid: SecretsManagerAccess
+                Effect: Allow
+                Action:
+                  - secretsmanager:ListSecrets
+                Resource: '*'
+              - Sid: DescribeVpcResources
+                Effect: Allow
+                Action:
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeNetworkInterfaces
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  TestInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${ProjectName}-vpc-test-profile'
+      Roles:
+        - !Ref TestInstanceRole
+
+  # Test Instance in Private Subnet (simulates Lambda environment)
+  PrivateSubnetTestInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref AmiId
+      SubnetId:
+        Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
+      SecurityGroupIds:
+        - !Ref TestSecurityGroup
+      IamInstanceProfile: !Ref TestInstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-test-private'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: vpc-test
+        - Key: TestType
+          Value: private-subnet
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Set environment variables for the test script
+          export TEST_RESULTS_BUCKET="${TestResultsBucket}"
+          export AWS_REGION="${AWS::Region}"
+          export SECURITY_GROUP_ID="${TestSecurityGroup}"
+          
+          # Download and run the test script from S3
+          aws s3 cp s3://${TestResultsBucket}/scripts/private-subnet-tests.sh /tmp/private-subnet-tests.sh --region ${AWS::Region}
+          chmod +x /tmp/private-subnet-tests.sh
+          /tmp/private-subnet-tests.sh
+
+  # Test Instance in Public Subnet (simulates CodeBuild with internet access)
+  PublicSubnetTestInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref AmiId
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          SubnetId:
+            Fn::ImportValue: !Sub '${ProjectName}-PublicSubnetId'
+          GroupSet:
+            - !Ref TestSecurityGroupPublic
+          AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref TestInstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-test-public'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: vpc-test
+        - Key: TestType
+          Value: public-subnet
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Set environment variables for the test script
+          export TEST_RESULTS_BUCKET="${TestResultsBucket}"
+          export AWS_REGION="${AWS::Region}"
+          
+          # Download and run the test script from S3
+          aws s3 cp s3://${TestResultsBucket}/scripts/public-subnet-tests.sh /tmp/public-subnet-tests.sh --region ${AWS::Region}
+          chmod +x /tmp/public-subnet-tests.sh
+          /tmp/public-subnet-tests.sh
+
+  # Test Security Group for Private Subnet (mimics Lambda SG - no ingress)
+  TestSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Test Security Group for Private Subnet (Lambda-like isolation)
+      VpcId:
+        Fn::ImportValue: !Sub '${ProjectName}-VpcId'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for AWS API calls and VPC endpoints
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP for testing (should be blocked by lack of route)
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-test-private-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Test Security Group for Public Subnet (mimics CodeBuild SG)
+  TestSecurityGroupPublic:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Test Security Group for Public Subnet (CodeBuild-like)
+      VpcId:
+        Fn::ImportValue: !Sub '${ProjectName}-VpcId'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH for git clone
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-test-public-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Lambda function to aggregate and report test results
+  TestResultsAggregator:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-vpc-test-aggregator'
+      Runtime: python3.11
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 256
+      Role: !GetAtt TestAggregatorRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref TestResultsBucket
+          PROJECT_NAME: !Ref ProjectName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          
+          def handler(event, context):
+              s3 = boto3.client('s3')
+              bucket = os.environ['BUCKET_NAME']
+              project = os.environ['PROJECT_NAME']
+              
+              # List all test result files
+              response = s3.list_objects_v2(
+                  Bucket=bucket,
+                  Prefix='vpc-tests/'
+              )
+              
+              all_results = {
+                  'aggregated_at': datetime.utcnow().isoformat() + 'Z',
+                  'project': project,
+                  'test_files': [],
+                  'overall_summary': {
+                      'total_tests': 0,
+                      'passed': 0,
+                      'failed': 0,
+                      'suites': []
+                  }
+              }
+              
+              if 'Contents' not in response:
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'message': 'No test results found', 'results': all_results})
+                  }
+              
+              for obj in response['Contents']:
+                  if obj['Key'].endswith('.json') and not obj['Key'].endswith('aggregated.json'):
+                      try:
+                          result_obj = s3.get_object(Bucket=bucket, Key=obj['Key'])
+                          result_data = json.loads(result_obj['Body'].read().decode('utf-8'))
+                          
+                          all_results['test_files'].append(obj['Key'])
+                          
+                          if 'summary' in result_data:
+                              all_results['overall_summary']['total_tests'] += result_data['summary'].get('total', 0)
+                              all_results['overall_summary']['passed'] += result_data['summary'].get('passed', 0)
+                              all_results['overall_summary']['failed'] += result_data['summary'].get('failed', 0)
+                              all_results['overall_summary']['suites'].append({
+                                  'name': result_data.get('testSuite', 'Unknown'),
+                                  'subnet': result_data.get('subnet', 'unknown'),
+                                  'summary': result_data['summary'],
+                                  'tests': result_data.get('tests', [])
+                              })
+                      except Exception as e:
+                          print(f"Error processing {obj['Key']}: {str(e)}")
+              
+              # Determine overall status
+              all_results['overall_summary']['status'] = 'PASSED' if all_results['overall_summary']['failed'] == 0 else 'FAILED'
+              
+              # Save aggregated results
+              s3.put_object(
+                  Bucket=bucket,
+                  Key='vpc-tests/aggregated.json',
+                  Body=json.dumps(all_results, indent=2),
+                  ContentType='application/json'
+              )
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(all_results, indent=2)
+              }
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  TestAggregatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-vpc-test-aggregator-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${TestResultsBucket}'
+                  - !Sub 'arn:aws:s3:::${TestResultsBucket}/*'
+
+  # EventBridge rule to invoke aggregator after a delay (allow instances to complete tests)
+  TestAggregatorSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-vpc-test-aggregator-schedule'
+      Description: Invoke test aggregator 10 minutes after stack creation
+      ScheduleExpression: 'rate(10 minutes)'
+      State: ENABLED
+      Targets:
+        - Id: AggregatorTarget
+          Arn: !GetAtt TestResultsAggregator.Arn
+
+  AggregatorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TestResultsAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TestAggregatorSchedule.Arn
+
+Outputs:
+  VpcTestDeploymentRoleArn:
+    Description: ARN of the VPC test deployment role (use for subsequent deployments)
+    Value: !GetAtt VpcTestDeploymentRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-VpcTestDeploymentRoleArn'
+
+  PrivateTestInstanceId:
+    Description: Instance ID of private subnet test instance
+    Value: !Ref PrivateSubnetTestInstance
+    Export:
+      Name: !Sub '${ProjectName}-VpcTestPrivateInstanceId'
+
+  PublicTestInstanceId:
+    Description: Instance ID of public subnet test instance
+    Value: !Ref PublicSubnetTestInstance
+    Export:
+      Name: !Sub '${ProjectName}-VpcTestPublicInstanceId'
+
+  TestResultsLocation:
+    Description: S3 location for test results
+    Value: !Sub 's3://${TestResultsBucket}/vpc-tests/'
+    Export:
+      Name: !Sub '${ProjectName}-VpcTestResultsLocation'
+
+  TestAggregatorFunctionName:
+    Description: Lambda function to aggregate test results
+    Value: !Ref TestResultsAggregator
+    Export:
+      Name: !Sub '${ProjectName}-VpcTestAggregatorFunction'

@@ -1,0 +1,72 @@
+name: VPC Security Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudformation/vpc.yaml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cloudformation/vpc.yaml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  AWS_REGION: eu-west-3
+
+jobs:
+  vpc-security-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Run VPC Security Tests
+        id: vpc-tests
+        run: |
+          cd test/vpctest
+          chmod +x run-vpc-tests.sh
+          ./run-vpc-tests.sh --full
+
+      - name: Download and check test results
+        run: |
+          # Download aggregated results from S3
+          aws s3 cp "s3://gits-artifacts/vpc-tests/aggregated.json" /tmp/vpc-results.json --region ${{ env.AWS_REGION }} || true
+          
+          if [[ -f /tmp/vpc-results.json ]]; then
+            echo "=== VPC Test Results ==="
+            cat /tmp/vpc-results.json | jq '.'
+            
+            # Check overall status
+            STATUS=$(jq -r '.overall_summary.status // "UNKNOWN"' /tmp/vpc-results.json)
+            FAILED=$(jq -r '.overall_summary.failed // 0' /tmp/vpc-results.json)
+            
+            echo ""
+            echo "Overall Status: $STATUS"
+            echo "Failed Tests: $FAILED"
+            
+            if [[ "$STATUS" != "PASSED" ]] || [[ "$FAILED" -gt 0 ]]; then
+              echo "::error::VPC Security Tests FAILED! $FAILED test(s) failed."
+              exit 1
+            fi
+            
+            echo "::notice::All VPC Security Tests PASSED!"
+          else
+            echo "::warning::Could not download test results from S3"
+            # Try to check individual result files
+            aws s3 ls "s3://gits-artifacts/vpc-tests/" --region ${{ env.AWS_REGION }} || true
+          fi

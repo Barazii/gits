@@ -302,6 +302,12 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-PrivateSubnetId'
 
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${ProjectName}-PublicSubnetId'
+
   CodeBuildLenseLambdaSGId:
     Description: CodeBuildLense Lambda Security Group ID
     Value: !Ref CodeBuildLenseLambdaSG
