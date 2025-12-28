@@ -330,9 +330,9 @@ Resources:
         - Key: MimicsSecurityGroup
           Value: !Sub '${ProjectName}-*-lambda-sg'
 
-  # =============================================================================
+  # ============================================================================
   # Lambda function to aggregate and report test results
-  # =============================================================================
+  # ============================================================================
   TestResultsAggregator:
     Type: AWS::Lambda::Function
     Properties:

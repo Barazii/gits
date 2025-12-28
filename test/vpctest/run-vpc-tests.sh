@@ -160,6 +160,10 @@ deploy_test_stack() {
         exit 1
     fi
     
+    # Clean up old test results to avoid stale data
+    print_info "Cleaning up old test results..."
+    aws s3 rm "s3://${ARTIFACT_BUCKET}/vpc-tests/" --recursive --region "$REGION" 2>/dev/null || true
+    
     # Upload test scripts to S3
     print_info "Uploading test scripts to S3..."
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
