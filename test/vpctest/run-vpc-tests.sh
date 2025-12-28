@@ -63,7 +63,6 @@ usage() {
     echo "  --results     Fetch and display results only"
     echo "  --cleanup     Delete test stack only"
     echo "  --full        Full test cycle: deploy, wait, results, cleanup (default)"
-    echo "  --no-cleanup  Run full test but keep stack for debugging"
     echo "  --help        Show this help message"
     echo ""
     echo "Environment variables:"
@@ -409,10 +408,6 @@ case "${1:-}" in
         cleanup_test_stack
         ;;
     --full)
-        full_test_cycle
-        ;;
-    --no-cleanup)
-        CLEANUP=false
         full_test_cycle
         ;;
     --help|-h)
