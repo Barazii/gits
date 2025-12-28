@@ -1,5 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: VPC Security Test Stack - Deploys test EC2 instances to verify network isolation and connectivity.
+Description: >
+  VPC Network Test Stack - Tests the gits app VPC architecture by deploying
+  an EC2 instance in the private subnet (same as CodeBuild and Lambdas) to
+  verify NAT Gateway connectivity and VPC endpoint functionality.
 
 Parameters:
   ProjectName:
@@ -69,6 +72,9 @@ Resources:
                   - ec2:DescribeVpcs
                   - ec2:DescribeSubnets
                   - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeNatGateways
+                  - ec2:DescribeVpcEndpoints
                 Resource: '*'
               # IAM for instance profiles
               - Sid: IAM
@@ -146,7 +152,7 @@ Resources:
           Value: vpc-test
 
   # =============================================================================
-  # IAM Role for Test Instances (SSM + S3 for results)
+  # IAM Role for Test Instance (SSM + S3 for results + AWS service access)
   # =============================================================================
   TestInstanceRole:
     Type: AWS::IAM::Role
@@ -186,6 +192,22 @@ Resources:
                 Action:
                   - secretsmanager:ListSecrets
                 Resource: '*'
+              - Sid: EventBridgeAccess
+                Effect: Allow
+                Action:
+                  - events:ListRules
+                Resource: '*'
+              - Sid: ECRAccess
+                Effect: Allow
+                Action:
+                  - ecr:DescribeRepositories
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Sid: CodeBuildAccess
+                Effect: Allow
+                Action:
+                  - codebuild:ListProjects
+                Resource: '*'
               - Sid: DescribeVpcResources
                 Effect: Allow
                 Action:
@@ -193,6 +215,9 @@ Resources:
                   - ec2:DescribeSubnets
                   - ec2:DescribeVpcs
                   - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeNatGateways
+                  - ec2:DescribeVpcEndpoints
                 Resource: '*'
       Tags:
         - Key: Project
@@ -205,7 +230,11 @@ Resources:
       Roles:
         - !Ref TestInstanceRole
 
-  # Test Instance in Private Subnet (simulates Lambda environment)
+  # =============================================================================
+  # Test Instance in Private Subnet
+  # This simulates BOTH CodeBuild and Lambda environments since both run in
+  # the private subnet in our architecture.
+  # =============================================================================
   PrivateSubnetTestInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -214,7 +243,7 @@ Resources:
       SubnetId:
         Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
       SecurityGroupIds:
-        - !Ref TestSecurityGroup
+        - !Ref TestSecurityGroupCodeBuild
       IamInstanceProfile: !Ref TestInstanceProfile
       Tags:
         - Key: Name
@@ -224,119 +253,86 @@ Resources:
         - Key: Purpose
           Value: vpc-test
         - Key: TestType
-          Value: private-subnet
+          Value: private-subnet-codebuild-lambda
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           # Set environment variables for the test script
           export TEST_RESULTS_BUCKET="${TestResultsBucket}"
           export AWS_REGION="${AWS::Region}"
-          export SECURITY_GROUP_ID="${TestSecurityGroup}"
+          export CODEBUILD_SECURITY_GROUP_ID="${TestSecurityGroupCodeBuild}"
+          export LAMBDA_SECURITY_GROUP_ID="${TestSecurityGroupLambda}"
+          export PROJECT_NAME="${ProjectName}"
           
           # Download and run the test script from S3
           aws s3 cp s3://${TestResultsBucket}/scripts/private-subnet-tests.sh /tmp/private-subnet-tests.sh --region ${AWS::Region}
           chmod +x /tmp/private-subnet-tests.sh
           /tmp/private-subnet-tests.sh
 
-  # Test Instance in Public Subnet (simulates CodeBuild with internet access)
-  PublicSubnetTestInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: !Ref InstanceType
-      ImageId: !Ref AmiId
-      NetworkInterfaces:
-        - DeviceIndex: '0'
-          SubnetId:
-            Fn::ImportValue: !Sub '${ProjectName}-PublicSubnetId'
-          GroupSet:
-            - !Ref TestSecurityGroupPublic
-          AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref TestInstanceProfile
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-vpc-test-public'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Purpose
-          Value: vpc-test
-        - Key: TestType
-          Value: public-subnet
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          # Set environment variables for the test script
-          export TEST_RESULTS_BUCKET="${TestResultsBucket}"
-          export AWS_REGION="${AWS::Region}"
-          
-          # Download and run the test script from S3
-          aws s3 cp s3://${TestResultsBucket}/scripts/public-subnet-tests.sh /tmp/public-subnet-tests.sh --region ${AWS::Region}
-          chmod +x /tmp/public-subnet-tests.sh
-          /tmp/public-subnet-tests.sh
-
-  # Test Security Group for Private Subnet (mimics Lambda SG - no ingress)
-  TestSecurityGroup:
+  # =============================================================================
+  # Test Security Group mimicking CodeBuild SG (needs SSH for git, HTTP, HTTPS)
+  # This is the same egress rules as gits-codebuild-sg in vpc.yaml
+  # =============================================================================
+  TestSecurityGroupCodeBuild:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Test Security Group for Private Subnet (Lambda-like isolation)
+      GroupDescription: Test SG mimicking CodeBuild - SSH HTTP HTTPS egress
       VpcId:
         Fn::ImportValue: !Sub '${ProjectName}-VpcId'
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: HTTPS for AWS API calls and VPC endpoints
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: HTTP for testing (should be blocked by lack of route)
-        - IpProtocol: udp
-          FromPort: 53
-          ToPort: 53
-          CidrIp: 0.0.0.0/0
-          Description: DNS
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-vpc-test-private-sg'
-        - Key: Project
-          Value: !Ref ProjectName
-
-  # Test Security Group for Public Subnet (mimics CodeBuild SG)
-  TestSecurityGroupPublic:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Test Security Group for Public Subnet (CodeBuild-like)
-      VpcId:
-        Fn::ImportValue: !Sub '${ProjectName}-VpcId'
+      # No ingress rules - CodeBuild doesn't accept inbound connections
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
-          Description: SSH for git clone
+          Description: SSH for git clone (via NAT Gateway)
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-          Description: HTTP
+          Description: HTTP (via NAT Gateway)
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: HTTPS
-        - IpProtocol: udp
-          FromPort: 53
-          ToPort: 53
-          CidrIp: 0.0.0.0/0
-          Description: DNS
+          Description: HTTPS for AWS APIs and external services (via NAT/VPC Endpoints)
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-vpc-test-public-sg'
+          Value: !Sub '${ProjectName}-vpc-test-codebuild-sg'
         - Key: Project
           Value: !Ref ProjectName
+        - Key: MimicsSecurityGroup
+          Value: !Sub '${ProjectName}-codebuild-sg'
 
+  # =============================================================================
+  # Test Security Group mimicking Lambda SG (HTTPS only for VPC endpoints)
+  # This is the same egress rules as Lambda SGs in vpc.yaml
+  # Lambda's HTTPS-only is a subset of CodeBuild's rules. If VPC endpoints work with CodeBuild SG, they'll work with Lambda SG too.
+  # =============================================================================
+  TestSecurityGroupLambda:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Test SG mimicking Lambda - HTTPS only egress
+      VpcId:
+        Fn::ImportValue: !Sub '${ProjectName}-VpcId'
+      # No ingress rules - Lambda functions don't accept inbound connections
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for AWS API calls via VPC endpoints
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-test-lambda-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: MimicsSecurityGroup
+          Value: !Sub '${ProjectName}-*-lambda-sg'
+
+  # =============================================================================
   # Lambda function to aggregate and report test results
+  # =============================================================================
   TestResultsAggregator:
     Type: AWS::Lambda::Function
     Properties:
@@ -458,8 +454,8 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${ProjectName}-vpc-test-aggregator-schedule'
-      Description: Invoke test aggregator 10 minutes after stack creation
-      ScheduleExpression: 'rate(10 minutes)'
+      Description: Invoke test aggregator 5 minutes after stack creation
+      ScheduleExpression: 'rate(5 minutes)'
       State: ENABLED
       Targets:
         - Id: AggregatorTarget
@@ -486,11 +482,17 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-VpcTestPrivateInstanceId'
 
-  PublicTestInstanceId:
-    Description: Instance ID of public subnet test instance
-    Value: !Ref PublicSubnetTestInstance
+  TestSecurityGroupCodeBuildId:
+    Description: Test Security Group ID (CodeBuild mimic)
+    Value: !Ref TestSecurityGroupCodeBuild
     Export:
-      Name: !Sub '${ProjectName}-VpcTestPublicInstanceId'
+      Name: !Sub '${ProjectName}-VpcTestCodeBuildSGId'
+
+  TestSecurityGroupLambdaId:
+    Description: Test Security Group ID (Lambda mimic)
+    Value: !Ref TestSecurityGroupLambda
+    Export:
+      Name: !Sub '${ProjectName}-VpcTestLambdaSGId'
 
   TestResultsLocation:
     Description: S3 location for test results

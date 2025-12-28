@@ -1,7 +1,14 @@
 #!/bin/bash
 #
-# VPC Security Test Runner
-# Deploys test infrastructure, waits for results, and cleans up
+# VPC Network Test Runner for gits App
+# =====================================
+# Deploys a test EC2 instance in the PRIVATE SUBNET to verify the VPC
+# architecture works correctly for both CodeBuild and Lambda functions.
+#
+# This tests:
+# - NAT Gateway: CodeBuild needs this for git clone (SSH/HTTPS)
+# - VPC Endpoints: Both CodeBuild and Lambda need these for AWS services
+# - Security Isolation: No public IP, proper subnet placement
 #
 
 set -e
@@ -158,7 +165,6 @@ deploy_test_stack() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     aws s3 cp "${SCRIPT_DIR}/private-subnet-tests.sh" "s3://${ARTIFACT_BUCKET}/scripts/private-subnet-tests.sh" --region "$REGION"
-    aws s3 cp "${SCRIPT_DIR}/public-subnet-tests.sh" "s3://${ARTIFACT_BUCKET}/scripts/public-subnet-tests.sh" --region "$REGION"
     
     print_success "Test scripts uploaded to S3"
     
@@ -186,14 +192,8 @@ deploy_test_stack() {
         --query 'Stacks[0].Outputs[?OutputKey==`PrivateTestInstanceId`].OutputValue' \
         --output text)
     
-    PUBLIC_INSTANCE=$(aws cloudformation describe-stacks \
-        --stack-name "$STACK_NAME" \
-        --region "$REGION" \
-        --query 'Stacks[0].Outputs[?OutputKey==`PublicTestInstanceId`].OutputValue' \
-        --output text)
-    
     print_info "Private subnet test instance: $PRIVATE_INSTANCE"
-    print_info "Public subnet test instance: $PUBLIC_INSTANCE"
+    print_info "(Simulates both CodeBuild and Lambda network environments)"
 }
 
 wait_for_tests() {
@@ -201,11 +201,12 @@ wait_for_tests() {
     
     print_info "Waiting ${WAIT_TIME_SECONDS} seconds for EC2 instances to run tests..."
     print_info "Tests include:"
-    echo "  • External HTTP/HTTPS connectivity"
-    echo "  • VPC endpoint reachability (S3, DynamoDB, Secrets Manager)"
-    echo "  • Security group ingress verification"
-    echo "  • Internal network isolation"
+    echo "  • NAT Gateway connectivity (SSH/HTTPS to GitHub for git clone)"
+    echo "  • VPC Endpoints (S3, DynamoDB, Secrets Manager, EventBridge, ECR, CodeBuild)"
+    echo "  • Security isolation (no public IP, private subnet verification)"
+    echo "  • Route table verification (NAT Gateway route exists)"
     echo "  • DNS resolution"
+    echo "  • NEGATIVE TESTS: Blocked ports, services without VPC endpoints"
     echo ""
     
     # Progress indicator
@@ -259,7 +260,7 @@ fetch_results() {
         # Try to fetch individual results
         print_warning "Aggregated results not available, fetching individual results..."
         
-        for prefix in "private-subnet" "public-subnet"; do
+        for prefix in "private-subnet"; do
             LATEST=$(aws s3 ls "s3://${ARTIFACT_BUCKET}/vpc-tests/${prefix}-" --region "$REGION" 2>/dev/null | grep ".json" | sort | tail -1 | awk '{print $4}')
             if [[ -n "$LATEST" ]]; then
                 aws s3 cp "s3://${ARTIFACT_BUCKET}/vpc-tests/${LATEST}" "/tmp/${prefix}-results.json" --region "$REGION"
