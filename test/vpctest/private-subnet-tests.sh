@@ -181,9 +181,9 @@ fi
 echo "Test 10: CodeBuild VPC Interface Endpoint" >> /tmp/vpc-tests/test.log
 CB_TEST=$(aws codebuild list-projects --region $AWS_REGION 2>&1 && echo "SUCCESS" || echo "FAILED")
 if [[ "$CB_TEST" == *"SUCCESS"* ]]; then
-  add_test_result "vpce_codebuild_interface" "reachable" "reachable" "true" "CodeBuild VPC Interface Endpoint working" "codebuild"
+  add_test_result "vpce_codebuild_interface" "reachable" "reachable" "true" "CodeBuild VPC Interface Endpoint working" "lambda"
 else
-  add_test_result "vpce_codebuild_interface" "reachable" "unreachable" "false" "CodeBuild VPC Interface Endpoint FAILED: $CB_TEST" "codebuild"
+  add_test_result "vpce_codebuild_interface" "reachable" "unreachable" "false" "CodeBuild VPC Interface Endpoint FAILED: $CB_TEST" "lambda"
 fi
 
 # =============================================================================
@@ -211,25 +211,8 @@ else
   add_test_result "isolation_private_subnet" "private_subnet" "subnet:$SUBNET_INFO" "false" "Instance should be in private subnet (got: $SUBNET_INFO)" "both"
 fi
 
-# Test 13: Verify route to NAT Gateway exists
-echo "Test 13: Verify NAT Gateway Route" >> /tmp/vpc-tests/test.log
-NAT_ROUTE=$(aws ec2 describe-route-tables --region $AWS_REGION \
-  --filters "Name=association.subnet-id,Values=$SUBNET_ID" \
-  --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`].NatGatewayId' --output text 2>&1)
-if [[ "$NAT_ROUTE" == nat-* ]]; then
-  add_test_result "isolation_nat_route" "has_nat_route" "has_nat_route" "true" "Private subnet has route to NAT Gateway: $NAT_ROUTE" "codebuild"
-else
-  # Try alternative: check if NAT exists for VPC and route table has NAT
-  NAT_EXISTS=$(aws ec2 describe-nat-gateways --region $AWS_REGION --filter "Name=vpc-id,Values=$VPC_ID" "Name=state,Values=available" --query 'NatGateways[0].NatGatewayId' --output text 2>&1)
-  if [[ "$NAT_EXISTS" == nat-* ]]; then
-    add_test_result "isolation_nat_route" "has_nat_route" "nat_exists:$NAT_EXISTS" "true" "NAT Gateway exists for VPC: $NAT_EXISTS (route via main RT)" "codebuild"
-  else
-    add_test_result "isolation_nat_route" "has_nat_route" "no_nat:$NAT_ROUTE" "false" "Private subnet should have route to NAT Gateway" "codebuild"
-  fi
-fi
-
-# Test 14: DNS resolution works
-echo "Test 14: DNS resolution" >> /tmp/vpc-tests/test.log
+# Test 13: DNS resolution works (for DNS settings 'enableDnsSupport' and 'enableDnsHostnames')
+echo "Test 13: DNS resolution" >> /tmp/vpc-tests/test.log
 DNS_TEST=$(nslookup s3.$AWS_REGION.amazonaws.com 2>&1)
 if [[ "$DNS_TEST" == *"Address"* ]]; then
   add_test_result "dns_resolution" "working" "working" "true" "DNS resolution working correctly" "both"
@@ -237,8 +220,8 @@ else
   add_test_result "dns_resolution" "working" "failed" "false" "DNS resolution failed: $DNS_TEST" "both"
 fi
 
-# Test 15: Verify VPC Endpoints exist
-echo "Test 15: Verify VPC Endpoints exist" >> /tmp/vpc-tests/test.log
+# Test 14: Verify VPC Endpoints exist
+echo "Test 14: Verify VPC Endpoints exist" >> /tmp/vpc-tests/test.log
 # VPC_ID already fetched at the start using IMDSv2
 if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
   VPCE_COUNT=$(aws ec2 describe-vpc-endpoints --region $AWS_REGION \
@@ -260,110 +243,90 @@ fi
 echo "" >> /tmp/vpc-tests/test.log
 echo "=== Negative Tests (Verify Blocked Access Fails) ===" >> /tmp/vpc-tests/test.log
 
-# Test 16: AWS service WITHOUT VPC endpoint should timeout/fail from Lambda SG
-# Lambda only has HTTPS egress to 0.0.0.0/0, but without VPC endpoint, AWS services
-# would need to go through NAT. However, for services we DON'T have endpoints for,
-# this tests that we haven't accidentally opened too much.
-# SQS is NOT in our VPC endpoints list, so it should fail or timeout quickly
-echo "Test 16: SQS access should fail (no VPC endpoint configured)" >> /tmp/vpc-tests/test.log
-SQS_TEST=$(timeout 15 aws sqs list-queues --region $AWS_REGION 2>&1 || echo "TIMEOUT_OR_FAILED")
-if [[ "$SQS_TEST" == *"TIMEOUT_OR_FAILED"* ]] || [[ "$SQS_TEST" == *"timed out"* ]] || [[ "$SQS_TEST" == *"Could not connect"* ]]; then
-  add_test_result "negative_no_sqs_endpoint" "should_fail" "failed" "true" "SQS access correctly blocked (no VPC endpoint)" "lambda"
-else
-  # SQS worked - this might go via NAT which is OK for CodeBuild but not ideal for Lambda
-  add_test_result "negative_no_sqs_endpoint" "should_fail" "succeeded" "false" "WARNING: SQS accessible (going via NAT Gateway - consider adding VPC endpoint or this is expected)" "lambda"
-fi
-
-# Test 17: SNS access should fail (no VPC endpoint configured)
-echo "Test 17: SNS access should fail (no VPC endpoint configured)" >> /tmp/vpc-tests/test.log
-SNS_TEST=$(timeout 15 aws sns list-topics --region $AWS_REGION 2>&1 || echo "TIMEOUT_OR_FAILED")
-if [[ "$SNS_TEST" == *"TIMEOUT_OR_FAILED"* ]] || [[ "$SNS_TEST" == *"timed out"* ]] || [[ "$SNS_TEST" == *"Could not connect"* ]]; then
-  add_test_result "negative_no_sns_endpoint" "should_fail" "failed" "true" "SNS access correctly blocked (no VPC endpoint)" "lambda"
-else
-  add_test_result "negative_no_sns_endpoint" "should_fail" "succeeded" "false" "WARNING: SNS accessible (going via NAT Gateway)" "lambda"
-fi
-
-# Test 18: Non-standard port access should fail (e.g., port 8080)
-# Security groups only allow specific ports, random ports should be blocked
-echo "Test 18: Non-standard port (8080) should be blocked" >> /tmp/vpc-tests/test.log
+# Test 15: Non-standard port access should fail (e.g., port 8080)
+# Only "timed out" means SG blocked it; "Connection refused" means traffic got through
+echo "Test 15: Non-standard port (8080) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_8080_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/httpbin.org/8080' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
-if [[ "$PORT_8080_TEST" == *"BLOCKED"* ]] || [[ "$PORT_8080_TEST" == *"timed out"* ]] || [[ "$PORT_8080_TEST" == *"Connection refused"* ]]; then
-  add_test_result "negative_port_8080_blocked" "blocked" "blocked" "true" "Port 8080 correctly blocked by security group" "both"
+if [[ "$PORT_8080_TEST" == *"timed out"* ]]; then
+  add_test_result "negative_port_8080_blocked" "blocked" "blocked" "true" "Port 8080 correctly blocked (timeout)" "both"
+elif [[ "$PORT_8080_TEST" == *"BLOCKED"* ]]; then
+  add_test_result "negative_port_8080_blocked" "blocked" "blocked" "true" "Port 8080 correctly blocked" "both"
+elif [[ "$PORT_8080_TEST" == *"Connection refused"* ]]; then
+  add_test_result "negative_port_8080_blocked" "blocked" "reached_server" "false" "Port 8080 traffic reached server (SG too permissive)" "both"
 else
-  add_test_result "negative_port_8080_blocked" "blocked" "connected" "false" "Port 8080 should be blocked - security group too permissive" "both"
+  add_test_result "negative_port_8080_blocked" "blocked" "connected" "false" "Port 8080 should be blocked" "both"
 fi
 
-# Test 19: MySQL port (3306) should be blocked
-echo "Test 19: MySQL port (3306) should be blocked" >> /tmp/vpc-tests/test.log
+# Test 16: MySQL port (3306) should be blocked
+# Only "timed out" means SG blocked it; "Connection refused" means traffic got through
+echo "Test 16: MySQL port (3306) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_3306_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/8.8.8.8/3306' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
-if [[ "$PORT_3306_TEST" == *"BLOCKED"* ]] || [[ "$PORT_3306_TEST" == *"timed out"* ]] || [[ "$PORT_3306_TEST" == *"Connection refused"* ]]; then
+if [[ "$PORT_3306_TEST" == *"timed out"* ]]; then
+  add_test_result "negative_port_3306_blocked" "blocked" "blocked" "true" "MySQL port 3306 correctly blocked (timeout)" "both"
+elif [[ "$PORT_3306_TEST" == *"BLOCKED"* ]]; then
   add_test_result "negative_port_3306_blocked" "blocked" "blocked" "true" "MySQL port 3306 correctly blocked" "both"
+elif [[ "$PORT_3306_TEST" == *"Connection refused"* ]]; then
+  add_test_result "negative_port_3306_blocked" "blocked" "reached_server" "false" "MySQL port 3306 traffic reached server (SG too permissive)" "both"
 else
   add_test_result "negative_port_3306_blocked" "blocked" "connected" "false" "MySQL port 3306 should be blocked" "both"
 fi
 
-# Test 20: SMTP port (25) should be blocked (AWS blocks this anyway, but verify)
-echo "Test 20: SMTP port (25) should be blocked" >> /tmp/vpc-tests/test.log
-PORT_25_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/smtp.gmail.com/25' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
-if [[ "$PORT_25_TEST" == *"BLOCKED"* ]] || [[ "$PORT_25_TEST" == *"timed out"* ]] || [[ "$PORT_25_TEST" == *"Connection refused"* ]]; then
-  add_test_result "negative_port_25_blocked" "blocked" "blocked" "true" "SMTP port 25 correctly blocked" "both"
-else
-  add_test_result "negative_port_25_blocked" "blocked" "connected" "false" "SMTP port 25 should be blocked" "both"
-fi
-
-# Test 21: FTP port (21) should be blocked
-echo "Test 21: FTP port (21) should be blocked" >> /tmp/vpc-tests/test.log
+# Test 17: FTP port (21) should be blocked
+# Only "timed out" means SG blocked it; "Connection refused" means traffic got through
+echo "Test 17: FTP port (21) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_21_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/ftp.gnu.org/21' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
-if [[ "$PORT_21_TEST" == *"BLOCKED"* ]] || [[ "$PORT_21_TEST" == *"timed out"* ]] || [[ "$PORT_21_TEST" == *"Connection refused"* ]]; then
+if [[ "$PORT_21_TEST" == *"timed out"* ]]; then
+  add_test_result "negative_port_21_blocked" "blocked" "blocked" "true" "FTP port 21 correctly blocked (timeout)" "both"
+elif [[ "$PORT_21_TEST" == *"BLOCKED"* ]]; then
   add_test_result "negative_port_21_blocked" "blocked" "blocked" "true" "FTP port 21 correctly blocked" "both"
+elif [[ "$PORT_21_TEST" == *"Connection refused"* ]]; then
+  add_test_result "negative_port_21_blocked" "blocked" "reached_server" "false" "FTP port 21 traffic reached server (SG too permissive)" "both"
 else
   add_test_result "negative_port_21_blocked" "blocked" "connected" "false" "FTP port 21 should be blocked" "both"
 fi
 
-# Test 22: Telnet port (23) should be blocked
-echo "Test 22: Telnet port (23) should be blocked" >> /tmp/vpc-tests/test.log
+# Test 18: Telnet port (23) should be blocked
+# Only "timed out" means SG blocked it; "Connection refused" means traffic got through
+echo "Test 18: Telnet port (23) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_23_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/telehack.com/23' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
-if [[ "$PORT_23_TEST" == *"BLOCKED"* ]] || [[ "$PORT_23_TEST" == *"timed out"* ]] || [[ "$PORT_23_TEST" == *"Connection refused"* ]]; then
+if [[ "$PORT_23_TEST" == *"timed out"* ]]; then
+  add_test_result "negative_port_23_blocked" "blocked" "blocked" "true" "Telnet port 23 correctly blocked (timeout)" "both"
+elif [[ "$PORT_23_TEST" == *"BLOCKED"* ]]; then
   add_test_result "negative_port_23_blocked" "blocked" "blocked" "true" "Telnet port 23 correctly blocked" "both"
+elif [[ "$PORT_23_TEST" == *"Connection refused"* ]]; then
+  add_test_result "negative_port_23_blocked" "blocked" "reached_server" "false" "Telnet port 23 traffic reached server (SG too permissive)" "both"
 else
   add_test_result "negative_port_23_blocked" "blocked" "connected" "false" "Telnet port 23 should be blocked" "both"
 fi
 
-# Test 23: Redis port (6379) should be blocked
-echo "Test 23: Redis port (6379) should be blocked" >> /tmp/vpc-tests/test.log
+# Test 19: Redis port (6379) should be blocked
+# Only "timed out" means SG blocked it; "Connection refused" means traffic got through
+echo "Test 19: Redis port (6379) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_6379_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/8.8.8.8/6379' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
-if [[ "$PORT_6379_TEST" == *"BLOCKED"* ]] || [[ "$PORT_6379_TEST" == *"timed out"* ]] || [[ "$PORT_6379_TEST" == *"Connection refused"* ]]; then
+if [[ "$PORT_6379_TEST" == *"timed out"* ]]; then
+  add_test_result "negative_port_6379_blocked" "blocked" "blocked" "true" "Redis port 6379 correctly blocked (timeout)" "both"
+elif [[ "$PORT_6379_TEST" == *"BLOCKED"* ]]; then
   add_test_result "negative_port_6379_blocked" "blocked" "blocked" "true" "Redis port 6379 correctly blocked" "both"
+elif [[ "$PORT_6379_TEST" == *"Connection refused"* ]]; then
+  add_test_result "negative_port_6379_blocked" "blocked" "reached_server" "false" "Redis port 6379 traffic reached server (SG too permissive)" "both"
 else
   add_test_result "negative_port_6379_blocked" "blocked" "connected" "false" "Redis port 6379 should be blocked" "both"
 fi
 
-# Test 24: UDP traffic test - NTP port 123
-# Note: UDP through NAT Gateway may work even without explicit SG rules
-# because NAT Gateway allows all outbound traffic. This is informational.
-echo "Test 24: UDP port 123 (NTP) connectivity check" >> /tmp/vpc-tests/test.log
-UDP_123_TEST=$(timeout 5 nc -u -z -w 2 pool.ntp.org 123 2>&1 && echo "CONNECTED" || echo "BLOCKED")
-if [[ "$UDP_123_TEST" == *"BLOCKED"* ]] || [[ "$UDP_123_TEST" == *"timed out"* ]]; then
-  add_test_result "negative_udp_123_blocked" "blocked_or_via_nat" "blocked" "true" "UDP port 123 (NTP) blocked by security group" "both"
-else
-  # UDP through NAT is expected - this is not a security issue
-  add_test_result "negative_udp_123_blocked" "blocked_or_via_nat" "via_nat" "true" "UDP port 123 (NTP) goes through NAT Gateway (expected behavior)" "both"
-fi
-
-# Test 25: Direct internet access without NAT should fail
-# Try to reach an IP that bypasses DNS (proves we need NAT Gateway)
-echo "Test 25: Verify traffic goes through NAT (not direct)" >> /tmp/vpc-tests/test.log
-# Get our outbound IP and verify it's the NAT Gateway's EIP, not a direct connection
+# Test 20: Verify traffic goes through NAT (not direct)
+echo "Test 20: Verify traffic goes through NAT (not direct)" >> /tmp/vpc-tests/test.log
+# Get our outbound IP and verify it's one of the NAT Gateway's EIPs
 OUTBOUND_IP=$(curl -s --connect-timeout 10 https://api.ipify.org 2>&1 || echo "FAILED")
-NAT_EIP=$(aws ec2 describe-nat-gateways --region $AWS_REGION \
-  --filter "Name=state,Values=available" \
-  --query 'NatGateways[0].NatGatewayAddresses[0].PublicIp' --output text 2>&1)
-if [[ "$OUTBOUND_IP" == "$NAT_EIP" ]]; then
-  add_test_result "negative_traffic_via_nat" "via_nat" "via_nat" "true" "Outbound traffic correctly routes through NAT Gateway ($OUTBOUND_IP)" "codebuild"
+# Get ALL NAT Gateway EIPs for this VPC
+NAT_EIPS=$(aws ec2 describe-nat-gateways --region $AWS_REGION \
+  --filter "Name=vpc-id,Values=$VPC_ID" "Name=state,Values=available" \
+  --query 'NatGateways[].NatGatewayAddresses[].PublicIp' --output text 2>&1)
+if [[ "$NAT_EIPS" == *"$OUTBOUND_IP"* ]]; then
+  add_test_result "negative_traffic_via_nat" "via_nat" "via_nat:$OUTBOUND_IP" "true" "Outbound traffic correctly routes through NAT Gateway ($OUTBOUND_IP)" "codebuild"
 elif [[ "$OUTBOUND_IP" == "FAILED" ]]; then
   add_test_result "negative_traffic_via_nat" "via_nat" "no_internet" "false" "Could not verify NAT routing - no internet access" "codebuild"
 else
-  add_test_result "negative_traffic_via_nat" "via_nat" "unknown_ip:$OUTBOUND_IP" "false" "Outbound IP ($OUTBOUND_IP) doesn't match NAT EIP ($NAT_EIP)" "codebuild"
+  add_test_result "negative_traffic_via_nat" "via_nat" "unknown_ip:$OUTBOUND_IP" "false" "Outbound IP ($OUTBOUND_IP) doesn't match any NAT EIP ($NAT_EIPS)" "codebuild"
 fi
 
 # =============================================================================

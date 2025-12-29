@@ -233,7 +233,8 @@ Resources:
   # =============================================================================
   # Test Instance in Private Subnet
   # This simulates BOTH CodeBuild and Lambda environments since both run in
-  # the private subnet in our architecture.
+  # the private subnet in our architecture. It uses the same CodeBuild SG to test
+  # if egress was set up correctly. 
   # =============================================================================
   PrivateSubnetTestInstance:
     Type: AWS::EC2::Instance
@@ -243,7 +244,7 @@ Resources:
       SubnetId:
         Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
       SecurityGroupIds:
-        - !Ref TestSecurityGroupCodeBuild
+        - Fn::ImportValue: !Sub '${ProjectName}-CodeBuildSecurityGroupId'
       IamInstanceProfile: !Ref TestInstanceProfile
       Tags:
         - Key: Name
@@ -260,75 +261,12 @@ Resources:
           # Set environment variables for the test script
           export TEST_RESULTS_BUCKET="${TestResultsBucket}"
           export AWS_REGION="${AWS::Region}"
-          export CODEBUILD_SECURITY_GROUP_ID="${TestSecurityGroupCodeBuild}"
-          export LAMBDA_SECURITY_GROUP_ID="${TestSecurityGroupLambda}"
           export PROJECT_NAME="${ProjectName}"
           
           # Download and run the test script from S3
           aws s3 cp s3://${TestResultsBucket}/scripts/private-subnet-tests.sh /tmp/private-subnet-tests.sh --region ${AWS::Region}
           chmod +x /tmp/private-subnet-tests.sh
           /tmp/private-subnet-tests.sh
-
-  # =============================================================================
-  # Test Security Group mimicking CodeBuild SG (needs SSH for git, HTTP, HTTPS)
-  # This is the same egress rules as gits-codebuild-sg in vpc.yaml
-  # =============================================================================
-  TestSecurityGroupCodeBuild:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Test SG mimicking CodeBuild - SSH HTTP HTTPS egress
-      VpcId:
-        Fn::ImportValue: !Sub '${ProjectName}-VpcId'
-      # No ingress rules - CodeBuild doesn't accept inbound connections
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-          Description: SSH for git clone (via NAT Gateway)
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: HTTP (via NAT Gateway)
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: HTTPS for AWS APIs and external services (via NAT/VPC Endpoints)
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-vpc-test-codebuild-sg'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: MimicsSecurityGroup
-          Value: !Sub '${ProjectName}-codebuild-sg'
-
-  # =============================================================================
-  # Test Security Group mimicking Lambda SG (HTTPS only for VPC endpoints)
-  # This is the same egress rules as Lambda SGs in vpc.yaml
-  # Lambda's HTTPS-only is a subset of CodeBuild's rules. If VPC endpoints work with CodeBuild SG, they'll work with Lambda SG too.
-  # =============================================================================
-  TestSecurityGroupLambda:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Test SG mimicking Lambda - HTTPS only egress
-      VpcId:
-        Fn::ImportValue: !Sub '${ProjectName}-VpcId'
-      # No ingress rules - Lambda functions don't accept inbound connections
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: HTTPS for AWS API calls via VPC endpoints
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-vpc-test-lambda-sg'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: MimicsSecurityGroup
-          Value: !Sub '${ProjectName}-*-lambda-sg'
 
   # ============================================================================
   # Lambda function to aggregate and report test results
@@ -481,18 +419,6 @@ Outputs:
     Value: !Ref PrivateSubnetTestInstance
     Export:
       Name: !Sub '${ProjectName}-VpcTestPrivateInstanceId'
-
-  TestSecurityGroupCodeBuildId:
-    Description: Test Security Group ID (CodeBuild mimic)
-    Value: !Ref TestSecurityGroupCodeBuild
-    Export:
-      Name: !Sub '${ProjectName}-VpcTestCodeBuildSGId'
-
-  TestSecurityGroupLambdaId:
-    Description: Test Security Group ID (Lambda mimic)
-    Value: !Ref TestSecurityGroupLambda
-    Export:
-      Name: !Sub '${ProjectName}-VpcTestLambdaSGId'
 
   TestResultsLocation:
     Description: S3 location for test results
