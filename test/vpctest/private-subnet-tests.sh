@@ -186,14 +186,23 @@ else
   add_test_result "vpce_codebuild_interface" "reachable" "unreachable" "false" "CodeBuild VPC Interface Endpoint FAILED: $CB_TEST" "lambda"
 fi
 
+# Test 11: CloudWatch Logs VPC Interface Endpoint
+echo "Test 11: CloudWatch Logs VPC Interface Endpoint" >> /tmp/vpc-tests/test.log
+CWL_TEST=$(aws logs describe-log-groups --region $AWS_REGION --limit 1 2>&1 && echo "SUCCESS" || echo "FAILED")
+if [[ "$CWL_TEST" == *"SUCCESS"* ]]; then
+  add_test_result "vpce_cloudwatch_logs_interface" "reachable" "reachable" "true" "CloudWatch Logs VPC Interface Endpoint working" "both"
+else
+  add_test_result "vpce_cloudwatch_logs_interface" "reachable" "unreachable" "false" "CloudWatch Logs VPC Interface Endpoint FAILED: $CWL_TEST" "both"
+fi
+
 # =============================================================================
 # SECTION 3: Security Isolation Tests
 # =============================================================================
 echo "" >> /tmp/vpc-tests/test.log
 echo "=== Security Isolation Tests ===" >> /tmp/vpc-tests/test.log
 
-# Test 11: No public IP (instance is isolated from direct internet access)
-echo "Test 11: No Public IP" >> /tmp/vpc-tests/test.log
+# Test 12: No public IP (instance is isolated from direct internet access)
+echo "Test 12: No Public IP" >> /tmp/vpc-tests/test.log
 PUBLIC_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" --connect-timeout 5 http://169.254.169.254/latest/meta-data/public-ipv4 2>&1)
 if [ -z "$PUBLIC_IP" ] || [[ "$PUBLIC_IP" == *"404"* ]] || [[ "$PUBLIC_IP" == *"Not Found"* ]]; then
   add_test_result "isolation_no_public_ip" "no_public_ip" "no_public_ip" "true" "Instance has no public IP (isolated from direct internet access)" "both"
@@ -201,8 +210,8 @@ else
   add_test_result "isolation_no_public_ip" "no_public_ip" "has_public_ip:$PUBLIC_IP" "false" "Instance should NOT have a public IP in private subnet" "both"
 fi
 
-# Test 12: Verify we're in the private subnet
-echo "Test 12: Verify Private Subnet" >> /tmp/vpc-tests/test.log
+# Test 13: Verify we're in the private subnet
+echo "Test 13: Verify Private Subnet" >> /tmp/vpc-tests/test.log
 # SUBNET_ID already fetched at the start of the script using IMDSv2
 SUBNET_INFO=$(aws ec2 describe-subnets --subnet-ids $SUBNET_ID --region $AWS_REGION --query 'Subnets[0].Tags[?Key==`Name`].Value' --output text 2>&1)
 if [[ "$SUBNET_INFO" == *"private"* ]] || [[ "$SUBNET_INFO" == *"Private"* ]]; then
@@ -211,8 +220,8 @@ else
   add_test_result "isolation_private_subnet" "private_subnet" "subnet:$SUBNET_INFO" "false" "Instance should be in private subnet (got: $SUBNET_INFO)" "both"
 fi
 
-# Test 13: DNS resolution works (for DNS settings 'enableDnsSupport' and 'enableDnsHostnames')
-echo "Test 13: DNS resolution" >> /tmp/vpc-tests/test.log
+# Test 14: DNS resolution works (for DNS settings 'enableDnsSupport' and 'enableDnsHostnames')
+echo "Test 14: DNS resolution" >> /tmp/vpc-tests/test.log
 DNS_TEST=$(nslookup s3.$AWS_REGION.amazonaws.com 2>&1)
 if [[ "$DNS_TEST" == *"Address"* ]]; then
   add_test_result "dns_resolution" "working" "working" "true" "DNS resolution working correctly" "both"
@@ -220,20 +229,20 @@ else
   add_test_result "dns_resolution" "working" "failed" "false" "DNS resolution failed: $DNS_TEST" "both"
 fi
 
-# Test 14: Verify VPC Endpoints exist
-echo "Test 14: Verify VPC Endpoints exist" >> /tmp/vpc-tests/test.log
+# Test 15: Verify VPC Endpoints exist
+echo "Test 15: Verify VPC Endpoints exist" >> /tmp/vpc-tests/test.log
 # VPC_ID already fetched at the start using IMDSv2
 if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
   VPCE_COUNT=$(aws ec2 describe-vpc-endpoints --region $AWS_REGION \
     --filters "Name=vpc-id,Values=$VPC_ID" \
     --query 'VpcEndpoints | length(@)' --output text 2>&1)
-  if [ "$VPCE_COUNT" -ge 5 ] 2>/dev/null; then
-    add_test_result "vpce_count" ">=5" "$VPCE_COUNT" "true" "VPC has $VPCE_COUNT VPC Endpoints configured" "both"
+  if [ "$VPCE_COUNT" -ge 7 ] 2>/dev/null; then
+    add_test_result "vpce_count" ">=7" "$VPCE_COUNT" "true" "VPC has $VPCE_COUNT VPC Endpoints configured" "both"
   else
-    add_test_result "vpce_count" ">=5" "$VPCE_COUNT" "false" "VPC should have at least 5 VPC Endpoints (S3, DynamoDB, SecretsManager, EventBridge, ECR)" "both"
+    add_test_result "vpce_count" ">=7" "$VPCE_COUNT" "false" "VPC should have at least 7 VPC Endpoints (S3, DynamoDB, SecretsManager, EventBridge, ECR API, ECR DKR, CodeBuild, CloudWatch Logs)" "both"
   fi
 else
-  add_test_result "vpce_count" ">=5" "error:no_vpc_id" "false" "Could not determine VPC ID" "both"
+  add_test_result "vpce_count" ">=7" "error:no_vpc_id" "false" "Could not determine VPC ID" "both"
 fi
 
 # =============================================================================
@@ -243,9 +252,9 @@ fi
 echo "" >> /tmp/vpc-tests/test.log
 echo "=== Negative Tests (Verify Blocked Access Fails) ===" >> /tmp/vpc-tests/test.log
 
-# Test 15: Non-standard port access should fail (e.g., port 8080)
+# Test 16: Non-standard port access should fail (e.g., port 8080)
 # Only "timed out" means SG blocked it; "Connection refused" means traffic got through
-echo "Test 15: Non-standard port (8080) should be blocked" >> /tmp/vpc-tests/test.log
+echo "Test 16: Non-standard port (8080) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_8080_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/httpbin.org/8080' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
 if [[ "$PORT_8080_TEST" == *"timed out"* ]]; then
   add_test_result "negative_port_8080_blocked" "blocked" "blocked" "true" "Port 8080 correctly blocked (timeout)" "both"
@@ -257,9 +266,9 @@ else
   add_test_result "negative_port_8080_blocked" "blocked" "connected" "false" "Port 8080 should be blocked" "both"
 fi
 
-# Test 16: MySQL port (3306) should be blocked
+# Test 17: MySQL port (3306) should be blocked
 # Only "timed out" means SG blocked it; "Connection refused" means traffic got through
-echo "Test 16: MySQL port (3306) should be blocked" >> /tmp/vpc-tests/test.log
+echo "Test 17: MySQL port (3306) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_3306_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/8.8.8.8/3306' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
 if [[ "$PORT_3306_TEST" == *"timed out"* ]]; then
   add_test_result "negative_port_3306_blocked" "blocked" "blocked" "true" "MySQL port 3306 correctly blocked (timeout)" "both"
@@ -271,9 +280,9 @@ else
   add_test_result "negative_port_3306_blocked" "blocked" "connected" "false" "MySQL port 3306 should be blocked" "both"
 fi
 
-# Test 17: FTP port (21) should be blocked
+# Test 18: FTP port (21) should be blocked
 # Only "timed out" means SG blocked it; "Connection refused" means traffic got through
-echo "Test 17: FTP port (21) should be blocked" >> /tmp/vpc-tests/test.log
+echo "Test 18: FTP port (21) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_21_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/ftp.gnu.org/21' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
 if [[ "$PORT_21_TEST" == *"timed out"* ]]; then
   add_test_result "negative_port_21_blocked" "blocked" "blocked" "true" "FTP port 21 correctly blocked (timeout)" "both"
@@ -285,9 +294,9 @@ else
   add_test_result "negative_port_21_blocked" "blocked" "connected" "false" "FTP port 21 should be blocked" "both"
 fi
 
-# Test 18: Telnet port (23) should be blocked
+# Test 19: Telnet port (23) should be blocked
 # Only "timed out" means SG blocked it; "Connection refused" means traffic got through
-echo "Test 18: Telnet port (23) should be blocked" >> /tmp/vpc-tests/test.log
+echo "Test 19: Telnet port (23) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_23_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/telehack.com/23' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
 if [[ "$PORT_23_TEST" == *"timed out"* ]]; then
   add_test_result "negative_port_23_blocked" "blocked" "blocked" "true" "Telnet port 23 correctly blocked (timeout)" "both"
@@ -299,9 +308,9 @@ else
   add_test_result "negative_port_23_blocked" "blocked" "connected" "false" "Telnet port 23 should be blocked" "both"
 fi
 
-# Test 19: Redis port (6379) should be blocked
+# Test 20: Redis port (6379) should be blocked
 # Only "timed out" means SG blocked it; "Connection refused" means traffic got through
-echo "Test 19: Redis port (6379) should be blocked" >> /tmp/vpc-tests/test.log
+echo "Test 20: Redis port (6379) should be blocked" >> /tmp/vpc-tests/test.log
 PORT_6379_TEST=$(timeout 5 bash -c 'echo > /dev/tcp/8.8.8.8/6379' 2>&1 && echo "CONNECTED" || echo "BLOCKED")
 if [[ "$PORT_6379_TEST" == *"timed out"* ]]; then
   add_test_result "negative_port_6379_blocked" "blocked" "blocked" "true" "Redis port 6379 correctly blocked (timeout)" "both"
@@ -313,8 +322,8 @@ else
   add_test_result "negative_port_6379_blocked" "blocked" "connected" "false" "Redis port 6379 should be blocked" "both"
 fi
 
-# Test 20: Verify traffic goes through NAT (not direct)
-echo "Test 20: Verify traffic goes through NAT (not direct)" >> /tmp/vpc-tests/test.log
+# Test 21: Verify traffic goes through NAT (not direct)
+echo "Test 21: Verify traffic goes through NAT (not direct)" >> /tmp/vpc-tests/test.log
 # Get our outbound IP and verify it's one of the NAT Gateway's EIPs
 OUTBOUND_IP=$(curl -s --connect-timeout 10 https://api.ipify.org 2>&1 || echo "FAILED")
 # Get ALL NAT Gateway EIPs for this VPC
