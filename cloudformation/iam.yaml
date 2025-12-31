@@ -300,6 +300,33 @@ Resources:
       Tags:
         - Key: Project
           Value: gits
+  VpcFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-vpc-flow-logs-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FlowLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/${ProjectName}-flow-logs:*'
+      Tags:
+        - Key: Project
+          Value: gits
   CloudFormationDeploymentPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -547,3 +574,8 @@ Outputs:
     Value: !GetAtt CloudFormationDeploymentRole.Arn
     Export:
       Name: !Sub '${ProjectName}-CloudFormationDeploymentRoleArn'
+  VpcFlowLogsRoleArn:
+    Description: ARN of role used by VPC Flow Logs to write to CloudWatch.
+    Value: !GetAtt VpcFlowLogsRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-VpcFlowLogsRoleArn'

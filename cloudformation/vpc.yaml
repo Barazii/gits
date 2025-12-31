@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: VPC with private and public subnets, NAT Gateway, and VPC endpoints for gits project.
+Description: VPC with private and public subnets, NAT Gateway, VPC endpoints, and Flow Logs for gits project.
 
 Parameters:
   ProjectName:
@@ -14,6 +14,10 @@ Parameters:
   PrivateSubnetCidr:
     Type: String
     Default: 10.0.2.0/24
+  FlowLogsRetentionDays:
+    Type: Number
+    Default: 14
+    Description: Number of days to retain VPC Flow Logs in CloudWatch
 
 Resources:
   VPC:
@@ -25,6 +29,33 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-vpc'
+
+  # VPC Flow Logs
+  FlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/${ProjectName}-flow-logs'
+      RetentionInDays: !Ref FlowLogsRetentionDays
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  VpcFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref FlowLogsLogGroup
+      DeliverLogsPermissionArn: !ImportValue
+        Fn::Sub: '${ProjectName}-VpcFlowLogsRoleArn'
+      MaxAggregationInterval: 60
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-flow-log'
+        - Key: Project
+          Value: !Ref ProjectName
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -355,3 +386,9 @@ Outputs:
     Value: !Ref VpcEndpointSecurityGroup
     Export:
       Name: !Sub '${ProjectName}-VpcEndpointSecurityGroupId'
+
+  FlowLogsLogGroupName:
+    Description: CloudWatch Log Group for VPC Flow Logs
+    Value: !Ref FlowLogsLogGroup
+    Export:
+      Name: !Sub '${ProjectName}-FlowLogsLogGroupName'

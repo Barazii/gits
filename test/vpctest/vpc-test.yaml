@@ -208,6 +208,11 @@ Resources:
                 Action:
                   - codebuild:ListProjects
                 Resource: '*'
+              - Sid: CloudWatchLogsAccess
+                Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                Resource: '*'
               - Sid: DescribeVpcResources
                 Effect: Allow
                 Action:
