@@ -35,6 +35,7 @@ target_link_libraries(gits PRIVATE nlohmann_json::nlohmann_json)
 
 target_link_libraries(gits PRIVATE CURL::libcurl OpenSSL::SSL OpenSSL::Crypto ${ZIP_LIBRARIES})
 target_include_directories(gits PRIVATE ${ZIP_INCLUDE_DIRS})
+target_link_directories(gits PRIVATE ${ZIP_LIBRARY_DIRS})
 
 # Embed version into the binary
 target_compile_definitions(gits PRIVATE GITS_VERSION="${GITS_GIT_VERSION}")

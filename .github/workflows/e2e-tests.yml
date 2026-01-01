@@ -1,0 +1,179 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: eu-west-3
+  TEST_REPO: https://github.com/Barazii/gitstest.git
+  TEST_REPO_SSH: git@github.com:Barazii/gitstest.git
+  DYNAMODB_TABLE: gits-jobs
+  API_GATEWAY_URL: ${{ secrets.AWS_API_GATEWAY_URL }}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libcurl4-openssl-dev libssl-dev libzip-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake curl openssl libzip
+
+      - name: Build gits CLI
+        working-directory: backend
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          make
+          
+      - name: Upload gits binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gits-${{ matrix.os }}
+          path: backend/build/gits
+          retention-days: 1
+
+  test-local:
+    needs: build
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download gits binary
+        uses: actions/download-artifact@v4
+        with:
+          name: gits-${{ matrix.os }}
+          path: ./bin
+
+      - name: Make gits executable
+        run: chmod +x ./bin/gits
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install pytest
+
+      - name: Install runtime dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4 libzip4
+
+      - name: Install runtime dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install curl openssl libzip
+
+      - name: Run local tests
+        run: |
+          pytest test/e2e/test_local.py -v --tb=short
+        env:
+          GITS_BINARY: ${{ github.workspace }}/bin/gits
+
+  test-aws:
+    needs: build
+    runs-on: ubuntu-latest
+    # Run AWS tests sequentially to avoid conflicts
+    concurrency:
+      group: aws-e2e-tests
+      cancel-in-progress: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download gits binary
+        uses: actions/download-artifact@v4
+        with:
+          name: gits-ubuntu-latest
+          path: ./bin
+
+      - name: Make gits executable
+        run: chmod +x ./bin/gits
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install pytest boto3 requests
+
+      - name: Install dependencies (Ubuntu)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4 libzip4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::482497089777:role/gits-cloudformation-deployment-role
+          role-duration-seconds: 3600
+          role-skip-session-tagging: true
+
+      - name: Setup gits config
+        run: |
+          mkdir -p ~/.gits
+          echo "GITHUB_EMAIL=${{ vars.TEST_GITHUB_EMAIL }}" > ~/.gits/config
+          echo "GITHUB_USERNAME=${{ vars.TEST_GITHUB_USERNAME }}" >> ~/.gits/config
+          echo "GITHUB_DISPLAY_NAME=${{ vars.TEST_GITHUB_DISPLAY_NAME }}" >> ~/.gits/config
+          echo "API_GATEWAY_URL=${{ secrets.AWS_API_GATEWAY_URL }}" >> ~/.gits/config
+          cat ~/.gits/config
+
+      - name: Clone test repository
+        run: |
+          git clone https://${{ secrets.TEST_REPO_PAT }}@github.com/Barazii/gitstest.git /tmp/gitstest
+          cd /tmp/gitstest
+          git config user.email "${{ vars.TEST_GITHUB_EMAIL }}"
+          git config user.name "${{ vars.TEST_GITHUB_DISPLAY_NAME }}"
+
+      - name: Run AWS integration tests
+        run: |
+          pytest test/e2e/test_aws_integration.py -v --tb=short -x
+        env:
+          GITS_BINARY: ${{ github.workspace }}/bin/gits
+          TEST_REPO_PATH: /tmp/gitstest
+          AWS_REGION: ${{ env.AWS_REGION }}
+          DYNAMODB_TABLE: ${{ env.DYNAMODB_TABLE }}
+          API_GATEWAY_URL: ${{ env.API_GATEWAY_URL }}
+          TEST_GITHUB_EMAIL: ${{ vars.TEST_GITHUB_EMAIL }}
+
+      - name: Cleanup on failure
+        if: failure()
+        run: |
+          python test/e2e/cleanup.py
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          DYNAMODB_TABLE: ${{ env.DYNAMODB_TABLE }}
+          TEST_GITHUB_EMAIL: ${{ vars.TEST_GITHUB_EMAIL }}

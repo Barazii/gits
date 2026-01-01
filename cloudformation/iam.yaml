@@ -344,6 +344,12 @@ Resources:
               - dynamodb:TagResource
               - dynamodb:UntagResource
               - dynamodb:ListTagsOfResource
+              # DynamoDB runtime operations for e2e testing
+              - dynamodb:Query
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:DeleteItem
+              - dynamodb:Scan
               - s3:CreateBucket
               - s3:PutBucketVersioning
               - s3:PutBucketEncryption
@@ -513,6 +519,10 @@ Resources:
               - ec2:CreateNetworkInterface
               - ec2:DescribeNetworkInterfaces
               - ec2:DeleteNetworkInterface
+              # VPC Flow Logs permissions
+              - ec2:CreateFlowLogs
+              - ec2:DescribeFlowLogs
+              - ec2:DeleteFlowLogs
             Resource: '*'
       Description: Policy for CloudFormation deployment permissions
   CloudFormationDeploymentRole:
