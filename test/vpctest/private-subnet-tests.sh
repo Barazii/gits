@@ -196,6 +196,56 @@ else
 fi
 
 # =============================================================================
+# SECTION 2.5: VPC Flow Logs Tests
+# These tests verify VPC Flow Logs are properly configured for network monitoring
+# =============================================================================
+echo "" >> /tmp/vpc-tests/test.log
+echo "=== VPC Flow Logs Tests ===" >> /tmp/vpc-tests/test.log
+
+# Test 11a: VPC Flow Logs Log Group exists
+echo "Test 11a: VPC Flow Logs Log Group exists" >> /tmp/vpc-tests/test.log
+FLOW_LOGS_GROUP_NAME="/aws/vpc/${PROJECT_NAME}-flow-logs"
+FLOW_LOG_GROUP_TEST=$(aws logs describe-log-groups --region $AWS_REGION --log-group-name-prefix "$FLOW_LOGS_GROUP_NAME" --query 'logGroups[?logGroupName==`'"$FLOW_LOGS_GROUP_NAME"'`].logGroupName' --output text 2>&1)
+if [ "$FLOW_LOG_GROUP_TEST" = "$FLOW_LOGS_GROUP_NAME" ]; then
+  add_test_result "flowlogs_log_group_exists" "exists" "exists" "true" "VPC Flow Logs CloudWatch Log Group exists: $FLOW_LOGS_GROUP_NAME" "both"
+else
+  add_test_result "flowlogs_log_group_exists" "exists" "not_found" "false" "VPC Flow Logs CloudWatch Log Group not found: $FLOW_LOGS_GROUP_NAME (got: $FLOW_LOG_GROUP_TEST)" "both"
+fi
+
+# Test 11b: VPC Flow Log is configured and active
+echo "Test 11b: VPC Flow Log is configured and active" >> /tmp/vpc-tests/test.log
+FLOW_LOG_STATUS=$(aws ec2 describe-flow-logs --region $AWS_REGION \
+  --filter "Name=resource-id,Values=$VPC_ID" \
+  --query 'FlowLogs[0].FlowLogStatus' --output text 2>&1)
+if [ "$FLOW_LOG_STATUS" = "ACTIVE" ]; then
+  add_test_result "flowlogs_active" "active" "active" "true" "VPC Flow Log is active for VPC $VPC_ID" "both"
+else
+  add_test_result "flowlogs_active" "active" "$FLOW_LOG_STATUS" "false" "VPC Flow Log is not active for VPC $VPC_ID (status: $FLOW_LOG_STATUS)" "both"
+fi
+
+# Test 11c: VPC Flow Log captures ALL traffic types
+echo "Test 11c: VPC Flow Log captures ALL traffic types" >> /tmp/vpc-tests/test.log
+FLOW_LOG_TRAFFIC_TYPE=$(aws ec2 describe-flow-logs --region $AWS_REGION \
+  --filter "Name=resource-id,Values=$VPC_ID" \
+  --query 'FlowLogs[0].TrafficType' --output text 2>&1)
+if [ "$FLOW_LOG_TRAFFIC_TYPE" = "ALL" ]; then
+  add_test_result "flowlogs_traffic_type" "ALL" "ALL" "true" "VPC Flow Log captures ALL traffic types (ACCEPT and REJECT)" "both"
+else
+  add_test_result "flowlogs_traffic_type" "ALL" "$FLOW_LOG_TRAFFIC_TYPE" "false" "VPC Flow Log should capture ALL traffic (got: $FLOW_LOG_TRAFFIC_TYPE)" "both"
+fi
+
+# Test 11d: VPC Flow Log destination is CloudWatch Logs
+echo "Test 11d: VPC Flow Log destination is CloudWatch Logs" >> /tmp/vpc-tests/test.log
+FLOW_LOG_DEST_TYPE=$(aws ec2 describe-flow-logs --region $AWS_REGION \
+  --filter "Name=resource-id,Values=$VPC_ID" \
+  --query 'FlowLogs[0].LogDestinationType' --output text 2>&1)
+if [ "$FLOW_LOG_DEST_TYPE" = "cloud-watch-logs" ]; then
+  add_test_result "flowlogs_destination_type" "cloud-watch-logs" "cloud-watch-logs" "true" "VPC Flow Log sends to CloudWatch Logs" "both"
+else
+  add_test_result "flowlogs_destination_type" "cloud-watch-logs" "$FLOW_LOG_DEST_TYPE" "false" "VPC Flow Log destination should be CloudWatch Logs (got: $FLOW_LOG_DEST_TYPE)" "both"
+fi
+
+# =============================================================================
 # SECTION 3: Security Isolation Tests
 # =============================================================================
 echo "" >> /tmp/vpc-tests/test.log

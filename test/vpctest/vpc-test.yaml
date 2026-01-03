@@ -223,6 +223,7 @@ Resources:
                   - ec2:DescribeRouteTables
                   - ec2:DescribeNatGateways
                   - ec2:DescribeVpcEndpoints
+                  - ec2:DescribeFlowLogs
                 Resource: '*'
       Tags:
         - Key: Project

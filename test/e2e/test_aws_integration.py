@@ -56,9 +56,16 @@ def run_gits(args, cwd=None):
 
 
 def get_future_time(minutes=2):
-    """Get a datetime string for the future."""
+    """Get a datetime string for the future.
+    
+    Returns a tuple of (cli_format, db_format):
+    - cli_format: YYYY-MM-DDTHH:MM (what the CLI expects)
+    - db_format: YYYY-MM-DDTHH:MM:00Z (what the backend stores)
+    """
     future = datetime.now() + timedelta(minutes=minutes)
-    return future.strftime("%Y-%m-%dT%H:%M")
+    cli_format = future.strftime("%Y-%m-%dT%H:%M")
+    db_format = future.strftime("%Y-%m-%dT%H:%M:00Z")
+    return cli_format, db_format
 
 
 def get_dynamodb_job(user_id, job_id=None):
@@ -202,11 +209,11 @@ class TestScheduleWithFiles:
         create_test_file(test_filename, test_content)
         
         # Schedule for 2 minutes in the future
-        future_time = get_future_time(2)
+        cli_time, db_time = get_future_time(2)
         
         result = run_gits([
             "schedule",
-            "--schedule_time", future_time,
+            "--schedule_time", cli_time,
             "--file", test_filename,
             "--message", f"E2E test: add {test_filename}"
         ])
@@ -217,13 +224,12 @@ class TestScheduleWithFiles:
         # Verify DynamoDB entry
         time.sleep(2)  # Give it a moment to propagate
         jobs = get_dynamodb_job(TEST_GITHUB_EMAIL)
-        assert len(jobs) > 0, "No job found in DynamoDB"
-        
         latest_job = jobs[0]
-        job_id = latest_job["job_id"]["S"]
+        assert latest_job["schedule_time"]["S"] == db_time
         assert latest_job["status"]["S"] == "pending"
         
         # Verify EventBridge rule exists
+        job_id = latest_job["job_id"]["S"]
         rule = get_eventbridge_rule(job_id)
         assert rule is not None, f"EventBridge rule {job_id} not found"
         assert rule["State"] == "ENABLED"
@@ -250,11 +256,11 @@ class TestScheduleWithDeletedFiles:
         subprocess.run(["git", "add", test_filename], cwd=TEST_REPO_PATH, capture_output=True)
         
         # Schedule the deletion
-        future_time = get_future_time(2)
+        cli_time, db_time = get_future_time(2)
         
         result = run_gits([
             "schedule",
-            "--schedule_time", future_time,
+            "--schedule_time", cli_time,
             "--file", test_filename,
             "--message", f"E2E test: delete {test_filename}"
         ])
@@ -264,8 +270,15 @@ class TestScheduleWithDeletedFiles:
         # Verify and cleanup
         time.sleep(2)
         jobs = get_dynamodb_job(TEST_GITHUB_EMAIL)
-        if jobs:
-            delete_job(jobs[0]["job_id"]["S"], TEST_GITHUB_EMAIL)
+        latest_job = jobs[0]
+        assert latest_job["schedule_time"]["S"] == db_time
+
+        job_id = latest_job["job_id"]["S"]
+        rule = get_eventbridge_rule(job_id)
+        assert rule is not None, f"EventBridge rule {job_id} not found"
+        assert rule["State"] == "ENABLED"
+
+        delete_job(latest_job["job_id"]["S"], TEST_GITHUB_EMAIL)
 
 
 class TestScheduleAutoDetect:
@@ -279,21 +292,28 @@ class TestScheduleAutoDetect:
         subprocess.run(["git", "add", test_filename], cwd=TEST_REPO_PATH, check=True)
         
         # Schedule without --file
-        future_time = get_future_time(2)
+        cli_time, db_time = get_future_time(2)
         
         result = run_gits([
             "schedule",
-            "--schedule_time", future_time,
+            "--schedule_time", cli_time,
             "--message", "E2E test: auto-detect changes"
         ])
         
         assert result.returncode == 0, f"Schedule failed: {result.stderr}"
         
-        # Cleanup
+        # Verify and cleanup
         time.sleep(2)
         jobs = get_dynamodb_job(TEST_GITHUB_EMAIL)
-        if jobs:
-            delete_job(jobs[0]["job_id"]["S"], TEST_GITHUB_EMAIL)
+        latest_job = jobs[0]
+        assert latest_job["schedule_time"]["S"] == db_time
+
+        job_id = latest_job["job_id"]["S"]
+        rule = get_eventbridge_rule(job_id)
+        assert rule is not None, f"EventBridge rule {job_id} not found"
+        assert rule["State"] == "ENABLED"
+
+        delete_job(latest_job["job_id"]["S"], TEST_GITHUB_EMAIL)
 
 
 class TestScheduleSameTime:
@@ -301,7 +321,7 @@ class TestScheduleSameTime:
 
     def test_schedule_multiple_jobs_same_time(self):
         """Test scheduling multiple jobs at the same time."""
-        future_time = get_future_time(3)
+        cli_time, db_time = get_future_time(3)
         job_ids = []
         
         # Schedule first job
@@ -310,7 +330,7 @@ class TestScheduleSameTime:
         
         result1 = run_gits([
             "schedule",
-            "--schedule_time", future_time,
+            "--schedule_time", cli_time,
             "--file", test_file1,
             "--message", "E2E test: multi job 1"
         ])
@@ -324,16 +344,29 @@ class TestScheduleSameTime:
         
         result2 = run_gits([
             "schedule",
-            "--schedule_time", future_time,
+            "--schedule_time", cli_time,
             "--file", test_file2,
             "--message", "E2E test: multi job 2"
         ])
         assert result2.returncode == 0, f"Second schedule failed: {result2.stderr}"
         
-        # Cleanup
+        # Verify both jobs have the same schedule_time and cleanup
         time.sleep(2)
         jobs = get_dynamodb_job(TEST_GITHUB_EMAIL)
-        for job in jobs:
+        # Both latest jobs should have the same schedule_time
+        assert jobs[0]["schedule_time"]["S"] == db_time
+        assert jobs[1]["schedule_time"]["S"] == db_time
+
+        job_id = jobs[0]["job_id"]["S"]
+        rule = get_eventbridge_rule(job_id)
+        assert rule is not None, f"EventBridge rule {job_id} not found"
+        assert rule["State"] == "ENABLED"
+        job_id = jobs[1]["job_id"]["S"]
+        rule = get_eventbridge_rule(job_id)
+        assert rule is not None, f"EventBridge rule {job_id} not found"
+        assert rule["State"] == "ENABLED"
+
+        for job in jobs[:2]:
             delete_job(job["job_id"]["S"], TEST_GITHUB_EMAIL)
 
 
@@ -360,28 +393,27 @@ class TestFullFlow:
         initial_commit = get_latest_commit(TEST_REPO_PATH)
         
         # Schedule for 2 minutes in the future
-        future_time = get_future_time(2)
+        cli_time, db_time = get_future_time(2)
         
         result = run_gits([
             "schedule",
-            "--schedule_time", future_time,
+            "--schedule_time", cli_time,
             "--file", test_filename,
             "--message", commit_message
         ])
         
         assert result.returncode == 0, f"Schedule failed: {result.stderr}"
-        print(f"Scheduled job for {future_time}")
+        print(f"Scheduled job for {cli_time}")
         
         # Wait for job to appear in DynamoDB
         time.sleep(3)
         jobs = get_dynamodb_job(TEST_GITHUB_EMAIL)
-        assert len(jobs) > 0, "Job not found in DynamoDB"
+        assert len(jobs) > 0, "No jobs found in DynamoDB"
         
         job = jobs[0]
+        assert job["schedule_time"]["S"] == db_time
         job_id = job["job_id"]["S"]
         print(f"Job ID: {job_id}")
-        
-        # Verify job is pending
         assert job["status"]["S"] == "pending", f"Expected pending, got {job['status']['S']}"
         
         # Verify EventBridge rule
@@ -440,11 +472,11 @@ class TestStatusCommand:
         test_filename = f"status-test-{int(time.time())}.txt"
         create_test_file(test_filename, "status test content")
         
-        future_time = get_future_time(5)
+        cli_time, db_time = get_future_time(5)
         
         run_gits([
             "schedule",
-            "--schedule_time", future_time,
+            "--schedule_time", cli_time,
             "--file", test_filename,
             "--message", "E2E test: status check"
         ])
@@ -457,10 +489,12 @@ class TestStatusCommand:
         assert result.returncode == 0, f"Status failed: {result.stderr}"
         assert "pending" in result.stdout.lower() or "job" in result.stdout.lower()
         
-        # Cleanup
+        # Verify and cleanup
         jobs = get_dynamodb_job(TEST_GITHUB_EMAIL)
-        if jobs:
-            delete_job(jobs[0]["job_id"]["S"], TEST_GITHUB_EMAIL)
+        assert len(jobs) > 0, "No jobs found in DynamoDB"
+        latest_job = jobs[0]
+        assert latest_job["schedule_time"]["S"] == db_time
+        delete_job(latest_job["job_id"]["S"], TEST_GITHUB_EMAIL)
 
 
 class TestJobOrdering:
@@ -475,11 +509,11 @@ class TestJobOrdering:
             test_filename = f"order-test-{i}-{int(time.time())}.txt"
             create_test_file(test_filename, f"order test {i}")
             
-            future_time = get_future_time(5 + i)
+            cli_time, _ = get_future_time(5 + i)
             
             result = run_gits([
                 "schedule",
-                "--schedule_time", future_time,
+                "--schedule_time", cli_time,
                 "--file", test_filename,
                 "--message", f"E2E test: order {i}"
             ])

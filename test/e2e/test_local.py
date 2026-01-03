@@ -55,7 +55,7 @@ class TestArgumentParsing:
         """Test unknown command."""
         result = run_gits(gits_binary, ["unknown"])
         assert result.returncode == 2
-        assert "unknown command" in result.stderr.lower() or "error" in result.stderr.lower()
+        assert "Error: unknown command: unknown" in result.stderr
 
 
 class TestScheduleTimeValidation:
@@ -65,7 +65,7 @@ class TestScheduleTimeValidation:
         """Test case 4: schedule without --schedule_time should fail."""
         result = run_gits(gits_binary, ["schedule"], cwd=temp_git_repo)
         assert result.returncode == 2
-        assert "schedule_time" in result.stderr.lower() or "time" in result.stderr.lower()
+        assert "Error: schedule requires --schedule_time <time>" in result.stderr
 
     def test_schedule_time_wrong_format(self, gits_binary, temp_git_repo, gits_config):
         """Test case 6: Wrong time format should fail."""
@@ -97,7 +97,7 @@ class TestScheduleTimeValidation:
             cwd=temp_git_repo
         )
         assert result.returncode != 0
-        assert "past" in result.stderr.lower() or "future" in result.stderr.lower()
+        assert "Error: Schedule time must be in the future." in result.stderr
 
 
 class TestFileArgument:
@@ -112,7 +112,7 @@ class TestFileArgument:
             cwd=temp_git_repo
         )
         assert result.returncode == 2
-        assert "file" in result.stderr.lower()
+        assert "Error: --file requires a file path" in result.stderr
 
     def test_file_with_nonexistent_file_fails(self, gits_binary, temp_git_repo, gits_config):
         """Test case 12: --file with non-existing file should fail."""
@@ -123,7 +123,7 @@ class TestFileArgument:
             cwd=temp_git_repo
         )
         assert result.returncode != 0
-        assert "not found" in result.stderr.lower() or "error" in result.stderr.lower()
+        assert "Error: file not found: nonexistent.txt" in result.stderr
 
     def test_file_comma_separated(self, gits_binary, temp_git_repo, gits_config):
         """Test case 3: --file with comma-separated files."""
@@ -139,7 +139,7 @@ class TestFileArgument:
         )
         # This will fail because it tries to contact API, but shouldn't fail on arg parsing
         # We check that it got past the file validation stage
-        assert "not found" not in result.stderr.lower()
+        assert "Error: file not found:" not in result.stderr
 
     def test_file_with_duplicates_succeeds(self, gits_binary, temp_git_repo, gits_config):
         """Test case 15: --file with duplicate files should succeed (deduplicated)."""
@@ -152,7 +152,7 @@ class TestFileArgument:
             cwd=temp_git_repo
         )
         # Should not fail on argument parsing
-        assert "not found" not in result.stderr.lower()
+        assert "Error: file not found:" not in result.stderr
 
 
 class TestMessageArgument:
@@ -196,7 +196,7 @@ class TestGitRepositoryValidation:
             cwd=temp_non_git_dir
         )
         assert result.returncode != 0
-        assert "git" in result.stderr.lower() or "repository" in result.stderr.lower()
+        assert "Error: Must be run inside a Git repository." in result.stderr
 
     def test_run_in_git_repo_without_remote_fails(self, gits_binary, temp_git_repo_no_remote, gits_config):
         """Test case 9 variant: Running in git repo without remote should fail."""
@@ -212,7 +212,7 @@ class TestGitRepositoryValidation:
         )
         assert result.returncode != 0
         # Should fail because no remote is set
-        assert "remote" in result.stderr.lower() or "origin" in result.stderr.lower() or "url" in result.stderr.lower()
+        assert "Error: Could not retrieve repository URL. Ensure 'origin' remote is set." in result.stderr
 
     def test_run_in_git_repo_with_file_remote_fails(self, gits_binary, temp_git_repo_file_remote, gits_config):
         """Test case 9: Running in git repo with file:// remote should fail."""
@@ -227,7 +227,7 @@ class TestGitRepositoryValidation:
             cwd=temp_git_repo_file_remote
         )
         assert result.returncode != 0
-        assert "https" in result.stderr.lower() or "ssh" in result.stderr.lower() or "format" in result.stderr.lower()
+        assert "Error: Repository URL must be HTTPS or SSH format for GitHub." in result.stderr
 
 
 class TestStatusCommand:
@@ -263,7 +263,7 @@ class TestDeleteCommand:
             cwd=temp_git_repo
         )
         assert result.returncode == 2
-        assert "job_id" in result.stderr.lower()
+        assert "Error: delete requires --job_id <id>" in result.stderr
 
     def test_delete_with_extra_args_fails(self, gits_binary, temp_git_repo, gits_config):
         """Delete command should not accept extra arguments after job_id."""
@@ -289,4 +289,4 @@ class TestNoChangesScenario:
             cwd=temp_git_repo
         )
         assert result.returncode != 0
-        assert "no changes" in result.stderr.lower() or "nothing" in result.stderr.lower()
+        assert "No changes found." in result.stderr
