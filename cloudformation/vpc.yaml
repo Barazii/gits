@@ -18,6 +18,32 @@ Parameters:
     Type: Number
     Default: 14
     Description: Number of days to retain VPC Flow Logs in CloudWatch
+  S3PrefixListId:
+    Type: String
+    Description: Managed prefix list ID for S3.
+    Default: pl-23ad484a
+  DynamoDBPrefixListId:
+    Type: String
+    Description: Managed prefix list ID for DynamoDB.
+    Default: pl-abb451c2
+  # GitHub IP range parameters - these should be periodically updated from https://api.github.com/meta
+  # Core GitHub IP ranges (shared across git, web, api services)
+  GitHubCoreRange1:
+    Type: String
+    Default: 192.30.252.0/22
+    Description: GitHub core IP range 1
+  GitHubCoreRange2:
+    Type: String
+    Default: 185.199.108.0/22
+    Description: GitHub core IP range 2
+  GitHubCoreRange3:
+    Type: String
+    Default: 140.82.112.0/20
+    Description: GitHub core IP range 3
+  GitHubCoreRange4:
+    Type: String
+    Default: 143.55.64.0/20
+    Description: GitHub core IP range 4
 
 Resources:
   VPC:
@@ -237,6 +263,18 @@ Resources:
         - !Ref VpcEndpointSecurityGroup
       PrivateDnsEnabled: true
 
+  StsInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sts'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+
   # Security Groups
   CodeBuildLenseLambdaSG:
     Type: AWS::EC2::SecurityGroup
@@ -247,7 +285,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref VpcCidr
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationPrefixListId: !Ref DynamoDBPrefixListId
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-codebuildlense-lambda-sg'
@@ -261,7 +303,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref VpcCidr
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationPrefixListId: !Ref DynamoDBPrefixListId
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-delete-lambda-sg'
@@ -275,7 +321,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref VpcCidr
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationPrefixListId: !Ref DynamoDBPrefixListId
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-getstatus-lambda-sg'
@@ -289,7 +339,15 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref VpcCidr
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationPrefixListId: !Ref S3PrefixListId
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationPrefixListId: !Ref DynamoDBPrefixListId
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-gitsops-lambda-sg'
@@ -300,18 +358,30 @@ Resources:
       GroupDescription: Security group for CodeBuild
       VpcId: !Ref VPC
       SecurityGroupEgress:
+        # SSH access to GitHub for Git SSH cloning - restricted to GitHub IP ranges
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
+          DestinationPrefixListId: !Ref GitHubSshPrefixList
+          Description: Allow SSH to GitHub for Git cloning
+        # HTTPS access to GitHub for API and HTTPS cloning - restricted to GitHub IP ranges
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          DestinationPrefixListId: !Ref GitHubHttpsPrefixList
+          Description: Allow HTTPS to GitHub for API and web cloning
+        # HTTPS access to VPC endpoints (ECR, CloudWatch Logs, etc.)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+          Description: Allow HTTPS to VPC endpoints within VPC
+        # HTTPS access to S3 via gateway endpoint
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationPrefixListId: !Ref S3PrefixListId
+          Description: Allow HTTPS to S3 via gateway endpoint
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-codebuild-sg'
@@ -331,6 +401,86 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-vpc-endpoint-sg'
+
+  # Custom Prefix Lists for GitHub IP ranges
+  # These prefix lists contain GitHub's published IP ranges for enhanced security
+  # Periodically update entries from https://api.github.com/meta
+  
+  # Prefix list for GitHub HTTPS traffic (API, web cloning) - TCP 443
+  GitHubHttpsPrefixList:
+    Type: AWS::EC2::PrefixList
+    Properties:
+      PrefixListName: !Sub '${ProjectName}-github-https'
+      AddressFamily: IPv4
+      MaxEntries: 20
+      Entries:
+        # Core GitHub ranges (shared across git, web, api services)
+        - Cidr: !Ref GitHubCoreRange1
+          Description: GitHub core range 1 (192.30.252.0/22)
+        - Cidr: !Ref GitHubCoreRange2
+          Description: GitHub core range 2 (185.199.108.0/22)
+        - Cidr: !Ref GitHubCoreRange3
+          Description: GitHub core range 3 (140.82.112.0/20)
+        - Cidr: !Ref GitHubCoreRange4
+          Description: GitHub core range 4 (143.55.64.0/20)
+        # Additional web/api specific ranges - sample of commonly used
+        - Cidr: 20.201.28.151/32
+          Description: GitHub web/api endpoint
+        - Cidr: 20.205.243.166/32
+          Description: GitHub web/api endpoint
+        - Cidr: 20.87.245.0/32
+          Description: GitHub web/api endpoint
+        - Cidr: 4.237.22.38/32
+          Description: GitHub web/api endpoint
+        - Cidr: 20.207.73.82/32
+          Description: GitHub web/api endpoint
+        - Cidr: 20.175.192.147/32
+          Description: GitHub web/api endpoint
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-github-https-prefix-list'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: GitHub HTTPS traffic (API and web cloning)
+
+  # Prefix list for GitHub SSH traffic (Git SSH cloning) - TCP 22
+  GitHubSshPrefixList:
+    Type: AWS::EC2::PrefixList
+    Properties:
+      PrefixListName: !Sub '${ProjectName}-github-ssh'
+      AddressFamily: IPv4
+      MaxEntries: 20
+      Entries:
+        # Core GitHub ranges (shared across git, web, api services)
+        - Cidr: !Ref GitHubCoreRange1
+          Description: GitHub core range 1 (192.30.252.0/22)
+        - Cidr: !Ref GitHubCoreRange2
+          Description: GitHub core range 2 (185.199.108.0/22)
+        - Cidr: !Ref GitHubCoreRange3
+          Description: GitHub core range 3 (140.82.112.0/20)
+        - Cidr: !Ref GitHubCoreRange4
+          Description: GitHub core range 4 (143.55.64.0/20)
+        # Git-specific SSH endpoints
+        - Cidr: 20.201.28.152/32
+          Description: GitHub git SSH endpoint
+        - Cidr: 20.205.243.160/32
+          Description: GitHub git SSH endpoint
+        - Cidr: 20.87.245.4/32
+          Description: GitHub git SSH endpoint
+        - Cidr: 4.237.22.40/32
+          Description: GitHub git SSH endpoint
+        - Cidr: 20.207.73.83/32
+          Description: GitHub git SSH endpoint
+        - Cidr: 20.175.192.146/32
+          Description: GitHub git SSH endpoint
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-github-ssh-prefix-list'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: GitHub SSH traffic (Git SSH cloning)
 
 Outputs:
   VpcId:
@@ -392,3 +542,15 @@ Outputs:
     Value: !Ref FlowLogsLogGroup
     Export:
       Name: !Sub '${ProjectName}-FlowLogsLogGroupName'
+
+  GitHubHttpsPrefixListId:
+    Description: Prefix List ID for GitHub HTTPS traffic
+    Value: !Ref GitHubHttpsPrefixList
+    Export:
+      Name: !Sub '${ProjectName}-GitHubHttpsPrefixListId'
+
+  GitHubSshPrefixListId:
+    Description: Prefix List ID for GitHub SSH traffic
+    Value: !Ref GitHubSshPrefixList
+    Export:
+      Name: !Sub '${ProjectName}-GitHubSshPrefixListId'

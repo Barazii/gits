@@ -106,6 +106,14 @@ deploy_stack "gits-dynamodb" "dynamodb.yaml" "" "TableName=${PROJECT_NAME}-jobs 
 
 deploy_stack "gits-secret-manager" "secretmanager.yaml" "" "ProjectName=$PROJECT_NAME GitHubToken=$GITHUB_TOKEN"
 
+# Check if the VPC flow logs log group exists and delete it before deploying VPC stack
+LOG_GROUP_NAME="/aws/vpc/${PROJECT_NAME}-flow-logs"
+if aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP_NAME" --query "logGroups[?logGroupName=='$LOG_GROUP_NAME'].logGroupName" --output text --region "$REGION" | grep -q "$LOG_GROUP_NAME"; then
+    echo "Log group $LOG_GROUP_NAME already exists. Deleting it..."
+    aws logs delete-log-group --log-group-name "$LOG_GROUP_NAME" --region "$REGION"
+    echo "Log group deleted successfully."
+fi
+
 deploy_stack "gits-vpc" "vpc.yaml" "" "ProjectName=$PROJECT_NAME"
 
 deploy_stack "gits-codebuild" "codebuild.yaml" "" "ProjectName=$PROJECT_NAME ArtifactBucketName=${PROJECT_NAME}-artifacts"

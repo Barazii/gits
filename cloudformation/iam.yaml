@@ -523,6 +523,12 @@ Resources:
               - ec2:CreateFlowLogs
               - ec2:DescribeFlowLogs
               - ec2:DeleteFlowLogs
+              # Prefix List permissions for GitHub IP restrictions
+              - ec2:CreateManagedPrefixList
+              - ec2:DeleteManagedPrefixList
+              - ec2:ModifyManagedPrefixList
+              - ec2:DescribeManagedPrefixLists
+              - ec2:GetManagedPrefixListEntries
             Resource: '*'
       Description: Policy for CloudFormation deployment permissions
   CloudFormationDeploymentRole:

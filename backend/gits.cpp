@@ -608,6 +608,7 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload_str.size());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -616,8 +617,12 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     curl_easy_cleanup(curl);
     curl_slist_free_all(headers);
-    if (res != CURLE_OK || http_code != 200) {
-        std::cerr << "Error: Remote scheduling failed (status " << http_code << "). Response: " << response << std::endl;
+    if (res != CURLE_OK) {
+        std::cerr << "Error: Network request failed: " << curl_easy_strerror(res) << std::endl;
+        std::exit(1);
+    }
+    if (http_code != 200) {
+        std::cerr << "Error: Remote scheduling failed (HTTP " << http_code << "). Response: " << response << std::endl;
         std::exit(1);
     }
     std::cout << "Successfully scheduled" << std::endl;
