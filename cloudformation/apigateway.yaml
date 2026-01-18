@@ -39,6 +39,7 @@ Resources:
       ResourceId: !Ref ScheduleResource
       HttpMethod: POST
       AuthorizationType: NONE
+      ApiKeyRequired: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -60,6 +61,7 @@ Resources:
       ResourceId: !Ref DeleteResource
       HttpMethod: POST
       AuthorizationType: NONE
+      ApiKeyRequired: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -81,6 +83,7 @@ Resources:
       ResourceId: !Ref StatusResource
       HttpMethod: GET
       AuthorizationType: NONE
+      ApiKeyRequired: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -122,6 +125,40 @@ Resources:
       RestApiId: !Ref GitsApi
       StageName: prod
 
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ApiDeployment
+    Properties:
+      Name: !Sub '${ProjectName}-api-key'
+      Description: API Key for gits system
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref GitsApi
+          StageName: prod
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiDeployment
+    Properties:
+      UsagePlanName: !Sub '${ProjectName}-usage-plan'
+      Description: Usage plan for gits API
+      ApiStages:
+        - ApiId: !Ref GitsApi
+          Stage: prod
+      Throttle:
+        BurstLimit: 100
+        RateLimit: 50
+      Quota:
+        Limit: 5000
+        Period: MONTH
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
 Outputs:
   ApiGatewayId:
     Value: !Ref GitsApi
@@ -131,3 +168,8 @@ Outputs:
     Value: !Sub 'https://${GitsApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
     Export:
       Name: !Sub '${ProjectName}-ApiUrl'
+  ApiKeyId:
+    Value: !Ref ApiKey
+    Description: API Key ID - retrieve the actual key value from AWS Console or CLI
+    Export:
+      Name: !Sub '${ProjectName}-ApiKeyId'

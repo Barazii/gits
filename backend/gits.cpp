@@ -236,6 +236,11 @@ void handle_status(const std::map<std::string, std::string>& config) {
         std::cerr << "Error: GITHUB_EMAIL not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
+    auto api_key_it = config.find("API_KEY");
+    if (api_key_it == config.end() || api_key_it->second.empty()) {
+        std::cerr << "Error: API_KEY not set in ~/.gits/config" << std::endl;
+        std::exit(1);
+    }
     std::string url = api_url_it->second + "/status?user_id=" + user_id_it->second;
 
     CURL* curl = curl_easy_init();
@@ -244,13 +249,18 @@ void handle_status(const std::map<std::string, std::string>& config) {
         std::exit(1);
     }
     std::string response;
+    struct curl_slist* headers = nullptr;
+    std::string api_key_header = "x-api-key: " + api_key_it->second;
+    headers = curl_slist_append(headers, api_key_header.c_str());
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     CURLcode res = curl_easy_perform(curl);
     long http_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     curl_easy_cleanup(curl);
+    curl_slist_free_all(headers);
     if (res != CURLE_OK || http_code != 200) {
         std::cerr << response << std::endl;
         std::exit(1);
@@ -285,6 +295,11 @@ void handle_delete(const std::string& job_id, const std::map<std::string, std::s
         std::cerr << "Error: GITHUB_EMAIL not set in ~/.gits/config" << std::endl;
         std::exit(1);
     }
+    auto api_key_it = config.find("API_KEY");
+    if (api_key_it == config.end() || api_key_it->second.empty()) {
+        std::cerr << "Error: API_KEY not set in ~/.gits/config" << std::endl;
+        std::exit(1);
+    }
     std::string url = api_url_it->second + "/delete";
     json payload = {
         {"job_id", job_id},
@@ -300,6 +315,8 @@ void handle_delete(const std::string& job_id, const std::map<std::string, std::s
     std::string response;
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
+    std::string api_key_header = "x-api-key: " + api_key_it->second;
+    headers = curl_slist_append(headers, api_key_header.c_str());
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
@@ -583,6 +600,12 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
         std::exit(1);
     }
 
+    auto api_key_it = config.find("API_KEY");
+    if (api_key_it == config.end() || api_key_it->second.empty()) {
+        std::cerr << "Error: API_KEY not set in ~/.gits/config" << std::endl;
+        std::exit(1);
+    }
+
     std::string url = api_url_it->second + "/schedule";
     json payload = {
         {"schedule_time", schedule_time},
@@ -605,6 +628,8 @@ void send_schedule_request(const std::string& schedule_time, const std::string& 
     std::string response;
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "Content-Type: application/json");
+    std::string api_key_header = "x-api-key: " + api_key_it->second;
+    headers = curl_slist_append(headers, api_key_header.c_str());
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
