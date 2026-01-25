@@ -9,18 +9,6 @@ find_package(OpenSSL REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZIP REQUIRED libzip)
 
-# Derive version from git tag (e.g., v1.2.3); fallback to v0.0.0
-execute_process(
-	COMMAND git describe --tags --always
-	WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-	OUTPUT_VARIABLE GITS_GIT_VERSION
-	OUTPUT_STRIP_TRAILING_WHITESPACE
-	ERROR_QUIET
-)
-if(NOT GITS_GIT_VERSION)
-	set(GITS_GIT_VERSION "v0.0.0")
-endif()
-
 add_executable(gits gits.cpp)
 
 # nlohmann/json (header-only): always use FetchContent for reliability
@@ -37,16 +25,12 @@ target_link_libraries(gits PRIVATE CURL::libcurl OpenSSL::SSL OpenSSL::Crypto ${
 target_include_directories(gits PRIVATE ${ZIP_INCLUDE_DIRS})
 target_link_directories(gits PRIVATE ${ZIP_LIBRARY_DIRS})
 
-# Embed version into the binary
-target_compile_definitions(gits PRIVATE GITS_VERSION="${GITS_GIT_VERSION}")
-
 install(TARGETS gits DESTINATION bin)
 
 # ---------------- CPack (Debian package) ----------------
 set(CPACK_GENERATOR "DEB")
-string(REGEX REPLACE "^v" "" GITS_SEMVER "${GITS_GIT_VERSION}")
 set(CPACK_PACKAGE_NAME "gits")
-set(CPACK_PACKAGE_VERSION "${GITS_SEMVER}")
+set(CPACK_PACKAGE_VERSION "1.0.0")
 set(CPACK_PACKAGE_CONTACT "MB mahmoud.baraziii@gmail.com")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_SECTION "utils")

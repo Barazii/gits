@@ -45,12 +45,6 @@ class TestArgumentParsing:
         assert "status" in result.stdout
         assert "delete" in result.stdout
 
-    def test_version_command(self, gits_binary):
-        """Test version command."""
-        result = run_gits(gits_binary, ["version"])
-        assert result.returncode == 0
-        assert "gits" in result.stdout
-
     def test_unknown_command(self, gits_binary):
         """Test unknown command."""
         result = run_gits(gits_binary, ["unknown"])
