@@ -43,7 +43,7 @@ Resources:
         SubnetIds:
           - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
         SecurityGroupIds:
-          - Fn::ImportValue: !Sub '${ProjectName}-GitsOpsLambdaSGId'
+          - Fn::ImportValue: !Sub '${ProjectName}-scheduleLambdaSGId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName
@@ -95,7 +95,7 @@ Resources:
         SubnetIds:
           - Fn::ImportValue: !Sub '${ProjectName}-PrivateSubnetId'
         SecurityGroupIds:
-          - Fn::ImportValue: !Sub '${ProjectName}-GetStatusLambdaSGId'
+          - Fn::ImportValue: !Sub '${ProjectName}-statusLambdaSGId'
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref DynamoTableName

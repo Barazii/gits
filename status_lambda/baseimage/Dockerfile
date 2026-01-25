@@ -1,4 +1,4 @@
-# Base image for gitsops_lambda with pre-built AWS SDK and dependencies
+# Base image for status_lambda with pre-built AWS SDK and dependencies
 
 # Pinned digest to ensure reproducible builds
 FROM public.ecr.aws/lambda/provided:al2023@sha256:2feecc94e45a6c5fde2600d0d8ddaae7da001d5f0641e7bfbd027024b181fe9a
@@ -10,7 +10,7 @@ RUN dnf install -y cmake gcc-c++ git libcurl-devel openssl-devel zlib-devel
 RUN git clone --recurse-submodules --branch 1.11.709 --depth 1 https://github.com/aws/aws-sdk-cpp.git && \
     cd aws-sdk-cpp && \
     mkdir build && cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="core;s3;eventbridge;dynamodb;secretsmanager" -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_TESTING=OFF -DENABLE_UNITY_BUILD=ON && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="core;dynamodb" -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_TESTING=OFF -DENABLE_UNITY_BUILD=ON && \
     make && make install
 
 # Clone and build aws-lambda-cpp runtime (pinned version)

@@ -312,10 +312,10 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-delete-lambda-sg'
 
-  GetStatusLambdaSG:
+  statusLambdaSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for GetStatus Lambda
+      GroupDescription: Security group for status Lambda
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -328,12 +328,12 @@ Resources:
           DestinationPrefixListId: !Ref DynamoDBPrefixListId
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-getstatus-lambda-sg'
+          Value: !Sub '${ProjectName}-status-lambda-sg'
 
-  GitsOpsLambdaSG:
+  scheduleLambdaSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for GitsOps Lambda
+      GroupDescription: Security group for schedule Lambda
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -350,7 +350,7 @@ Resources:
           DestinationPrefixListId: !Ref DynamoDBPrefixListId
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-gitsops-lambda-sg'
+          Value: !Sub '${ProjectName}-schedule-lambda-sg'
 
   CodeBuildSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -513,17 +513,17 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-DeleteLambdaSGId'
 
-  GetStatusLambdaSGId:
-    Description: GetStatus Lambda Security Group ID
-    Value: !Ref GetStatusLambdaSG
+  statusLambdaSGId:
+    Description: status Lambda Security Group ID
+    Value: !Ref statusLambdaSG
     Export:
-      Name: !Sub '${ProjectName}-GetStatusLambdaSGId'
+      Name: !Sub '${ProjectName}-statusLambdaSGId'
 
-  GitsOpsLambdaSGId:
-    Description: GitsOps Lambda Security Group ID
-    Value: !Ref GitsOpsLambdaSG
+  scheduleLambdaSGId:
+    Description: schedule Lambda Security Group ID
+    Value: !Ref scheduleLambdaSG
     Export:
-      Name: !Sub '${ProjectName}-GitsOpsLambdaSGId'
+      Name: !Sub '${ProjectName}-scheduleLambdaSGId'
 
   CodeBuildSecurityGroupId:
     Description: CodeBuild Security Group ID

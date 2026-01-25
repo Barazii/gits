@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(GetStatusLambda LANGUAGES CXX)
+project(statusLambda LANGUAGES CXX)
 
 find_package(ZLIB REQUIRED)
 find_package(aws-lambda-runtime REQUIRED)

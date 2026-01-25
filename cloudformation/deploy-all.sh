@@ -74,8 +74,8 @@ echo "Building and pushing Lambda images..."
 
 # Refresh credentials before each Lambda build (base image builds take ~8-9 minutes each)
 assume_deployment_role
-../gitsops_lambda/baseimage/build_and_push.sh
-../gitsops_lambda/deploy.sh
+../schedule_lambda/baseimage/build_and_push.sh
+../schedule_lambda/deploy.sh
 REPO_URI_SCHEDULE=$(aws ecr describe-repositories --repository-names gits-schedule-lambda --query 'repositories[0].repositoryUri' --output text --region $REGION)
 IMAGE_URI_SCHEDULE=$REPO_URI_SCHEDULE@$(aws ecr describe-images --repository-name gits-schedule-lambda --query 'imageDetails[0].imageDigest' --output text --region $REGION)
 
@@ -86,8 +86,8 @@ REPO_URI_DELETE=$(aws ecr describe-repositories --repository-names gits-delete-l
 IMAGE_URI_DELETE=$REPO_URI_DELETE@$(aws ecr describe-images --repository-name gits-delete-lambda --query 'imageDetails[0].imageDigest' --output text --region $REGION)
 
 assume_deployment_role
-../getstatus_lambda/baseimage/build_and_push.sh
-../getstatus_lambda/deploy.sh
+../status_lambda/baseimage/build_and_push.sh
+../status_lambda/deploy.sh
 REPO_URI_STATUS=$(aws ecr describe-repositories --repository-names gits-status-lambda --query 'repositories[0].repositoryUri' --output text --region $REGION)
 IMAGE_URI_STATUS=$REPO_URI_STATUS@$(aws ecr describe-images --repository-name gits-status-lambda --query 'imageDetails[0].imageDigest' --output text --region $REGION)
 

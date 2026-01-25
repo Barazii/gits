@@ -566,7 +566,7 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-DeleteLambdaRoleArn'
   StatusLambdaRoleArn:
-    Description: ARN of role assumed by GetStatus Lambda function.
+    Description: ARN of role assumed by status Lambda function.
     Value: !GetAtt StatusLambdaRole.Arn
     Export:
       Name: !Sub '${ProjectName}-StatusLambdaRoleArn'
