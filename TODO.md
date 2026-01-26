@@ -8,4 +8,4 @@ add support to gitlab.
 
 make ui similar to git: error messages, output messages .. etc.
 
-discuss all vpc archi and connections with grok. look at last chat here and grok.com.
+discuss all vpc archi and connections and its tests with grok. look at last chat here and grok.com. discuss the IaC cf and tf

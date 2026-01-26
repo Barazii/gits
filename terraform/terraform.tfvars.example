@@ -1,0 +1,111 @@
+# Gits Project - Terraform Configuration
+# Copy this file to terraform.tfvars and customize values
+
+#------------------------------------------------------------------------------
+# General Configuration
+#------------------------------------------------------------------------------
+project_name = "gits"
+environment  = "prod"
+aws_region   = "eu-west-3"
+
+#------------------------------------------------------------------------------
+# VPC Configuration
+#------------------------------------------------------------------------------
+vpc_cidr                 = "10.0.0.0/16"
+public_subnet_cidr       = "10.0.1.0/24"
+private_subnet_cidr      = "10.0.2.0/24"
+flow_logs_retention_days = 14
+
+# Region-specific prefix list IDs (update for your region)
+# eu-west-3 (Paris)
+s3_prefix_list_id       = "pl-23ad484a"
+dynamodb_prefix_list_id = "pl-abb451c2"
+
+#------------------------------------------------------------------------------
+# GitHub IP Ranges
+# Update periodically from https://api.github.com/meta
+#------------------------------------------------------------------------------
+github_core_ranges = [
+  "192.30.252.0/22",
+  "185.199.108.0/22",
+  "140.82.112.0/20",
+  "143.55.64.0/20"
+]
+
+github_web_api_ranges = [
+  "20.201.28.151/32",
+  "20.205.243.166/32",
+  "20.87.245.0/32",
+  "4.237.22.38/32",
+  "20.207.73.82/32",
+  "20.175.192.147/32"
+]
+
+github_ssh_ranges = [
+  "20.201.28.152/32",
+  "20.205.243.160/32",
+  "20.87.245.4/32",
+  "4.237.22.40/32",
+  "20.207.73.83/32",
+  "20.175.192.146/32"
+]
+
+#------------------------------------------------------------------------------
+# DynamoDB Configuration
+#------------------------------------------------------------------------------
+dynamodb_billing_mode           = "PAY_PER_REQUEST"
+dynamodb_point_in_time_recovery = true
+dynamodb_read_capacity          = 5
+dynamodb_write_capacity         = 5
+
+#------------------------------------------------------------------------------
+# S3 Configuration
+#------------------------------------------------------------------------------
+s3_enable_versioning   = true
+s3_block_public_access = true
+
+#------------------------------------------------------------------------------
+# ECR Configuration
+#------------------------------------------------------------------------------
+ecr_image_tag_mutability = "MUTABLE"
+ecr_scan_on_push         = true
+ecr_encryption_type      = "AES256"
+ecr_images_to_keep       = 10
+
+#------------------------------------------------------------------------------
+# Lambda Configuration
+#------------------------------------------------------------------------------
+lambda_schedule_timeout      = 30
+lambda_schedule_memory       = 512
+lambda_delete_timeout        = 30
+lambda_delete_memory         = 256
+lambda_status_timeout        = 15
+lambda_status_memory         = 256
+lambda_codebuildlens_timeout = 30
+lambda_codebuildlens_memory  = 256
+
+#------------------------------------------------------------------------------
+# CodeBuild Configuration
+#------------------------------------------------------------------------------
+codebuild_image        = "aws/codebuild/standard:7.0"
+codebuild_compute_type = "BUILD_GENERAL1_SMALL"
+codebuild_buildspec_file = "codebuild/buildspec.yaml"
+codebuild_timeout      = 30
+github_repo_url        = "https://github.com/Barazii/gits"
+
+#------------------------------------------------------------------------------
+# API Gateway Configuration
+#------------------------------------------------------------------------------
+api_throttle_burst_limit = 100
+api_throttle_rate_limit  = 50
+api_quota_limit          = 5000
+
+#------------------------------------------------------------------------------
+# Secrets Configuration
+# Set via environment variable: TF_VAR_github_token
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Lambda Image URIs
+# Set after ECR images are pushed using the deploy scripts
+#------------------------------------------------------------------------------
